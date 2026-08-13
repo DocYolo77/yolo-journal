@@ -1,11 +1,11 @@
-import { supabaseAdmin } from '@/lib/supabase/server'
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function GET() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const key = process.env.SUPABASE_SECRET_KEY ?? ''
 
   try {
-    const { count, error } = await supabaseAdmin
+    const { count, error } = await getSupabaseAdmin()
       .from('trades')
       .select('*', { count: 'exact', head: true })
 
