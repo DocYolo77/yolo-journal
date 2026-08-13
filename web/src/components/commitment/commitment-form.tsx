@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useState, useTransition, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
 import { WatchlistEditor, type WatchlistRow } from "./watchlist-editor";
 import { EpCandidatesEditor, type EpCandidateRow } from "./ep-candidates-editor";
@@ -10,6 +10,8 @@ import {
   type CommitmentFormState,
 } from "@/lib/validation/commitment";
 import type { CommitmentWithChildren } from "@/lib/data/commitments";
+import { fetchQqqExtensionAction } from "@/app/actions";
+import type { QqqExtensionSnapshot } from "@/lib/market-data/provider";
 
 const RISK_OPTIONS = ALLOWED_RISK_PCTS.map((v) => ({ value: String(v), label: `${v}%` }));
 
@@ -50,6 +52,29 @@ export function CommitmentForm({
 
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>(() => toWatchlistRows(existing));
   const [epCandidates, setEpCandidates] = useState<EpCandidateRow[]>(() => toEpCandidateRows(existing));
+
+  const [qqqAtrMultipleValue, setQqqAtrMultipleValue] = useState(
+    existing?.qqq_extension_atr_multiple != null ? String(existing.qqq_extension_atr_multiple) : ""
+  );
+  const [qqqLive, setQqqLive] = useState<{ data: QqqExtensionSnapshot | null; error: string | null }>({
+    data: null,
+    error: null,
+  });
+  const [qqqPending, startQqqTransition] = useTransition();
+
+  function handleFetchQqqExtension() {
+    startQqqTransition(async () => {
+      const result = await fetchQqqExtensionAction();
+      if (!result.data) {
+        setQqqLive({ data: null, error: result.error });
+        return;
+      }
+      setQqqLive({ data: result.data, error: null });
+      if (result.data.atrExtensionMultiple !== null) {
+        setQqqAtrMultipleValue(result.data.atrExtensionMultiple.toFixed(2));
+      }
+    });
+  }
 
   const errors = state.fieldErrors;
   const watchlistTickers = watchlist.map((w) => w.ticker.toUpperCase()).filter(Boolean);
@@ -102,12 +127,33 @@ export function CommitmentForm({
         </Section>
 
         <Section title="2 · QQQ-Extension">
-          <FieldNumber
-            name="qqqAtrMultiple"
-            label="ATR-Multiple"
-            defaultValue={existing?.qqq_extension_atr_multiple != null ? String(existing.qqq_extension_atr_multiple) : ""}
-            error={errors.qqqAtrMultiple}
-          />
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <FieldNumber
+                key={qqqAtrMultipleValue}
+                name="qqqAtrMultiple"
+                label="ATR-Multiple"
+                defaultValue={qqqAtrMultipleValue}
+                error={errors.qqqAtrMultiple}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleFetchQqqExtension}
+              disabled={qqqPending}
+              className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
+            >
+              {qqqPending ? "Lädt…" : "Live von Massive laden"}
+            </button>
+          </div>
+          {qqqLive.error ? (
+            <p className="text-xs text-negative">{qqqLive.error}</p>
+          ) : qqqLive.data ? (
+            <p className="text-xs text-muted-foreground">
+              Preis {qqqLive.data.price ?? "–"} · SMA50 {qqqLive.data.sma50 ?? "–"} · ATR14{" "}
+              {qqqLive.data.atr14 ?? "–"}
+            </p>
+          ) : null}
           <FieldTextarea
             name="qqqNote"
             label="Notiz"

@@ -31,6 +31,14 @@ export type IndicatorSnapshot = {
   atr14: number | null;
 };
 
+export type QqqExtensionSnapshot = {
+  price: number | null;
+  sma50: number | null;
+  atr14: number | null;
+  /** computeAtrPctExtensionFromMa(price, sma50, atr14) — null if any input is missing. */
+  atrExtensionMultiple: number | null;
+};
+
 export interface MarketDataProvider {
   readonly name: string;
 
@@ -49,4 +57,13 @@ export interface MarketDataProvider {
 
   /** QQQ/SPY snapshot for the Pre-Market Commitment's market_snapshot block. */
   getIndexSnapshot(params: { tradeDate: string }): Promise<Record<string, unknown>>;
+
+  /**
+   * Live QQQ ATR%-extension from its 50-day MA — the Commitment's
+   * QQQ-Extension section (§2, triggers the 0.5% risk cap at >= 8) and
+   * the Committed Focus Audit's sma50_atr_extension_at_entry (§7,
+   * legacy reference). Combines a current/live QQQ price with D-1
+   * SMA50/ATR14 (daily indicators only update once per session).
+   */
+  getQqqExtension(params: { tradeDate: string }): Promise<QqqExtensionSnapshot>;
 }

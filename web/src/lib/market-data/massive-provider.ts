@@ -1,6 +1,6 @@
-import type { IndicatorSnapshot, MarketDataProvider, OhlcBar, OhlcInterval } from "./provider";
+import type { IndicatorSnapshot, MarketDataProvider, OhlcBar, OhlcInterval, QqqExtensionSnapshot } from "./provider";
 import { getAggregateBars, getEma, getSma, getSnapshot, type MassiveAggBar } from "./massive-client";
-import { computeAtr14 } from "./indicators";
+import { computeAtr14, computeAtrPctExtensionFromMa } from "./indicators";
 import { shiftTradeDate } from "@/lib/trade-date";
 
 const INTERVAL_TO_MASSIVE: Record<OhlcInterval, { multiplier: number; timespan: "minute" | "day" }> = {
@@ -86,5 +86,26 @@ export class MassiveMarketDataProvider implements MarketDataProvider {
   async getIndexSnapshot(params: { tradeDate: string }): Promise<Record<string, unknown>> {
     const [qqq, spy] = await Promise.all([getSnapshot("QQQ"), getSnapshot("SPY")]);
     return { tradeDate: params.tradeDate, qqq, spy };
+  }
+
+  async getQqqExtension(params: { tradeDate: string }): Promise<QqqExtensionSnapshot> {
+    const [snapshot, indicators] = await Promise.all([
+      getSnapshot("QQQ"),
+      this.getPriorSessionIndicators({ ticker: "QQQ", tradeDate: params.tradeDate }),
+    ]);
+
+    // Prefer the live last trade; fall back to today's session close, then
+    // the prior session's close (D-1 indicators) if neither is available
+    // yet (e.g. called before the market has traded at all today).
+    const price = snapshot?.lastTrade?.p ?? snapshot?.day?.c ?? indicators?.close ?? null;
+    const sma50 = indicators?.sma50 ?? null;
+    const atr14 = indicators?.atr14 ?? null;
+
+    const atrExtensionMultiple =
+      price !== null && sma50 !== null && atr14 !== null
+        ? computeAtrPctExtensionFromMa({ price, movingAverage: sma50, atr: atr14 })
+        : null;
+
+    return { price, sma50, atr14, atrExtensionMultiple };
   }
 }
