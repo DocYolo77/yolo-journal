@@ -26,3 +26,36 @@ export function computeAtr14(bars: DailyBar[], period = 14): number | null {
   const lastN = trueRanges.slice(-period);
   return lastN.reduce((sum, tr) => sum + tr, 0) / lastN.length;
 }
+
+/**
+ * ATR%-normalized extension of price from a moving average, per the
+ * user-specified formula:
+ *
+ *   A = ATR%              = ATR / price
+ *   B = % gain from MA    = (price - movingAverage) / movingAverage
+ *   extension             = B / A
+ *
+ * This is NOT the naive `(price - movingAverage) / atr` — both ATR and
+ * the MA gain are expressed as a percentage first, which matters
+ * precisely in the "extended" case this metric exists to catch (price
+ * has moved meaningfully away from the MA, so price and movingAverage
+ * diverge and the naive version and this one give different answers).
+ *
+ * Used for both the Pre-Market Commitment's QQQ-Extension ("ATR
+ * multiple to SMA50", triggers the 0.5% risk cap at >= 8) and the
+ * Committed Focus Audit's sma50_atr_extension_at_entry filter (max
+ * 5.0x, LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md §7).
+ */
+export function computeAtrPctExtensionFromMa(params: {
+  price: number;
+  movingAverage: number;
+  atr: number;
+}): number | null {
+  if (params.price === 0 || params.movingAverage === 0) return null;
+
+  const atrPct = params.atr / params.price;
+  if (atrPct === 0) return null;
+
+  const gainFromMaPct = (params.price - params.movingAverage) / params.movingAverage;
+  return gainFromMaPct / atrPct;
+}
