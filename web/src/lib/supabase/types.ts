@@ -3,8 +3,9 @@
 // whenever a migration changes these tables.
 //
 // Covers the Journal OS V7.4.3 web-migration schema
-// (20260813171824_create_journal_os_commitment_schema.sql) only. The
-// earlier generic-trading-journal tables (accounts, strategies, trades,
+// (20260813171824_create_journal_os_commitment_schema.sql,
+// 20260813174339_create_shadowlist_decisions.sql) only. The earlier
+// generic-trading-journal tables (accounts, strategies, trades,
 // executions, trade_metrics, tags, trade_tags, journal_days, attachments)
 // still exist in the database but are no longer used by this app, so no
 // types are defined for them here.
@@ -129,4 +130,19 @@ export type AuditEventRow = {
   previous_hash: string | null;
   hash: string;
   created_at: string;
+};
+
+export type ShadowlistDecisionRow = {
+  id: string;
+  user_id: string | null;
+  commitment_id: string;
+  trade_date: string;
+  ticker: string;
+  list_type: WatchlistType;
+  actually_traded: boolean;
+  decision: "Genommen" | "Nicht genommen";
+  reason: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
