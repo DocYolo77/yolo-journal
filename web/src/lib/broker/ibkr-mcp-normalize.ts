@@ -1,12 +1,21 @@
 import { createHash } from "node:crypto";
-import type { IbkrMcpAccountSummary, IbkrMcpBalanceEntry, IbkrMcpTrade } from "./ibkr-mcp-types";
+import type { IbkrMcpAccountSummary, IbkrMcpBalanceEntry, IbkrMcpPosition, IbkrMcpTrade } from "./ibkr-mcp-types";
 
 // Normalizes the real Interactive_Brokers_IBKR MCP connector responses
-// into the shapes the broker_executions / broker_account_snapshots
-// tables expect. Pure functions — no I/O, no Supabase/MCP dependency —
-// so they're testable with fixture data independent of a live session.
-// See docs/ibkr-agent-sync-runbook.md for how a scheduled agent turn
-// actually calls the MCP tools and feeds their output through here.
+// into the shapes the broker_executions / broker_account_snapshots /
+// broker_positions_snapshots tables expect. Pure functions — no I/O, no
+// Supabase/MCP dependency — so they're testable with fixture data
+// independent of a live session. See docs/ibkr-agent-sync-runbook.md for
+// how a scheduled agent turn actually calls the MCP tools and feeds their
+// output through here.
+
+// Our own stable internal identifier for the single connected IBKR
+// account (see supabase/migrations/20260813180619_..._broker_schema.sql
+// and .../20260813185339_create_broker_positions_snapshots.sql). No MCP
+// response exposes IBKR's own account id, and the architecture explicitly
+// forbids inventing one — this may later be remapped to a real provider
+// account id without touching historical rows.
+export const DEFAULT_IBKR_PROVIDER_ACCOUNT_ID = "main";
 
 export type NormalizedBrokerExecution = {
   provider: "IBKR";
@@ -100,12 +109,13 @@ export type NormalizedBrokerAccountSnapshot = {
 /**
  * `providerAccountId` has no source field in any of these MCP responses
  * (the connector is implicitly scoped to a single connected account) -
- * it must be supplied by the caller, not guessed from the data.
+ * defaults to DEFAULT_IBKR_PROVIDER_ACCOUNT_ID, but callers may still
+ * override it explicitly (e.g. a future multi-account setup).
  */
 export function normalizeIbkrAccountSnapshot(params: {
   summary: IbkrMcpAccountSummary;
   balances: IbkrMcpBalanceEntry[];
-  providerAccountId: string;
+  providerAccountId?: string;
   tradingDate: string;
   capturedAt: string;
 }): NormalizedBrokerAccountSnapshot {
@@ -118,7 +128,7 @@ export function normalizeIbkrAccountSnapshot(params: {
 
   return {
     provider: "IBKR",
-    provider_account_id: params.providerAccountId,
+    provider_account_id: params.providerAccountId ?? DEFAULT_IBKR_PROVIDER_ACCOUNT_ID,
     trading_date: params.tradingDate,
     captured_at: params.capturedAt,
     net_liquidation_value: params.summary.net_liquidation ?? null,
@@ -136,5 +146,63 @@ export function normalizeIbkrAccountSnapshot(params: {
     excess_liquidity: params.summary.excess_liquidity ?? null,
     base_currency: params.summary.currency ?? null,
     source: "ibkr_mcp_agent_sync",
+  };
+}
+
+export type NormalizedBrokerPositionSnapshot = {
+  provider: "IBKR";
+  provider_account_id: string;
+  trading_date: string;
+  captured_at: string;
+  symbol: string;
+  provider_contract_id: string | null;
+  asset_class: string | null;
+  quantity: number;
+  average_price: number | null;
+  market_price: number | null;
+  market_value: number | null;
+  currency: string | null;
+  unrealized_pnl: number | null;
+  daily_pnl: number | null;
+  raw_payload: IbkrMcpPosition;
+};
+
+/**
+ * Normalizes get_account_positions rows for broker_positions_snapshots
+ * (20260813185339_create_broker_positions_snapshots.sql). Same
+ * append-only, historized pattern as the account snapshot: every sync
+ * writes new rows for `capturedAt`, never updates a prior snapshot in
+ * place, so intraday/day-over-day position history stays
+ * reconstructable. `providerAccountId` defaults to
+ * DEFAULT_IBKR_PROVIDER_ACCOUNT_ID for the same reason as the account
+ * snapshot above.
+ */
+export function normalizeIbkrPosition(
+  position: IbkrMcpPosition,
+  params: { providerAccountId?: string; tradingDate: string; capturedAt: string }
+): NormalizedBrokerPositionSnapshot {
+  return {
+    provider: "IBKR",
+    provider_account_id: params.providerAccountId ?? DEFAULT_IBKR_PROVIDER_ACCOUNT_ID,
+    trading_date: params.tradingDate,
+    captured_at: params.capturedAt,
+    // IbkrMcpPosition has no separate `symbol` field (unlike
+    // IbkrMcpTrade) — only `contract_description`. Unverified whether
+    // this is a bare ticker or a longer description; the connector's
+    // auth token expired before this could be checked against a live
+    // get_account_positions call. Re-verify on the first real sync run
+    // and switch to a dedicated symbol field if the description turns
+    // out to include more than the ticker.
+    symbol: position.contract_description,
+    provider_contract_id: position.contract_id != null ? String(position.contract_id) : null,
+    asset_class: position.asset_class || null,
+    quantity: position.position,
+    average_price: position.average_price ?? null,
+    market_price: position.market_price ?? null,
+    market_value: position.market_value ?? null,
+    currency: position.currency || null,
+    unrealized_pnl: position.unrealized_pnl ?? null,
+    daily_pnl: position.daily_pnl ?? null,
+    raw_payload: position,
   };
 }
