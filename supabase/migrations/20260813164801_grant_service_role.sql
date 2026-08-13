@@ -1,0 +1,9 @@
+grant select, insert, update, delete on public.accounts to service_role;
+grant select, insert, update, delete on public.strategies to service_role;
+grant select, insert, update, delete on public.trades to service_role;
+grant select, insert, update, delete on public.executions to service_role;
+grant select, insert, update, delete on public.trade_metrics to service_role;
+grant select, insert, update, delete on public.tags to service_role;
+grant select, insert, update, delete on public.trade_tags to service_role;
+grant select, insert, update, delete on public.journal_days to service_role;
+grant select, insert, update, delete on public.attachments to service_role;
