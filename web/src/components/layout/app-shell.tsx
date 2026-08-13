@@ -4,6 +4,17 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./nav-items";
+import { logoutAction } from "@/app/login/actions";
+
+function LogoutButton() {
+  return (
+    <form action={logoutAction}>
+      <button type="submit" className="text-xs text-muted-foreground hover:text-negative">
+        Abmelden
+      </button>
+    </form>
+  );
+}
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -58,8 +69,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </div>
         <NavLinks pathname={pathname} />
-        <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-          Single-User V1
+        <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
+          <span>Single-User V1</span>
+          <LogoutButton />
         </div>
       </aside>
 
