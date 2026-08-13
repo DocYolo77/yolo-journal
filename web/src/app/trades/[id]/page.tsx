@@ -5,16 +5,19 @@ import { TradeDetailView } from "@/components/trades/trade-detail-view";
 import { getTradeById } from "@/lib/data/trades";
 import { listActiveAccounts } from "@/lib/data/accounts";
 import { listActiveStrategies } from "@/lib/data/strategies";
-import { updateTradeAction } from "./actions";
+import { createExecutionAction, deleteExecutionAction, updateTradeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function TradeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ executionError?: string }>;
 }) {
   const { id } = await params;
+  const { executionError } = await searchParams;
 
   const [tradeResult, accountsResult, strategiesResult] = await Promise.all([
     getTradeById(id),
@@ -39,6 +42,8 @@ export default async function TradeDetailPage({
 
   const trade = tradeResult.data;
   const boundUpdateAction = updateTradeAction.bind(null, trade.id);
+  const boundCreateExecutionAction = createExecutionAction.bind(null, trade.id);
+  const boundDeleteExecutionAction = deleteExecutionAction.bind(null, trade.id);
 
   return (
     <div>
@@ -51,11 +56,18 @@ export default async function TradeDetailPage({
           ← Zurück zur Trade-Liste
         </Link>
       </div>
+      {executionError ? (
+        <p className="mb-4 rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative">
+          Execution konnte nicht gelöscht werden.
+        </p>
+      ) : null}
       <TradeDetailView
         trade={trade}
         accounts={accountsResult.data ?? []}
         strategies={strategiesResult.data ?? []}
         updateAction={boundUpdateAction}
+        createExecutionAction={boundCreateExecutionAction}
+        deleteExecutionAction={boundDeleteExecutionAction}
       />
     </div>
   );

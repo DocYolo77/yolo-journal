@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { TradeForm } from "./trade-form";
+import { ExecutionForm } from "./execution-form";
 import type { TradeDetail } from "@/lib/data/trades";
 import type { TradeFormState, TradeFormValues } from "@/lib/validation/trade";
+import type { ExecutionFormState } from "@/lib/validation/execution";
 import { formatCurrency, formatDateTime, formatNumber, toDatetimeLocalValue } from "@/lib/format";
 
 type Option = { id: string; name: string };
@@ -13,11 +15,18 @@ export function TradeDetailView({
   accounts,
   strategies,
   updateAction,
+  createExecutionAction,
+  deleteExecutionAction,
 }: {
   trade: TradeDetail;
   accounts: Option[];
   strategies: Option[];
   updateAction: (state: TradeFormState, formData: FormData) => Promise<TradeFormState>;
+  createExecutionAction: (
+    state: ExecutionFormState,
+    formData: FormData
+  ) => Promise<ExecutionFormState>;
+  deleteExecutionAction: (executionId: string, formData: FormData) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -128,7 +137,7 @@ export function TradeDetailView({
       <section className="rounded-lg border border-border bg-surface p-4">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Executions</h2>
         {trade.executions.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div className="mb-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -138,27 +147,38 @@ export function TradeDetailView({
                   <th className="py-2 pr-4 text-right">Preis</th>
                   <th className="py-2 pr-4 text-right">Fees</th>
                   <th className="py-2 pr-4">Notiz</th>
+                  <th className="py-2 pr-4" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {trade.executions.map((execution) => (
                   <tr key={execution.id}>
-                    <td className="py-2 pr-4 capitalize">{execution.side}</td>
+                    <td className="py-2 pr-4 capitalize">
+                      <span className={execution.side === "buy" ? "text-positive" : "text-negative"}>
+                        {execution.side}
+                      </span>
+                    </td>
                     <td className="py-2 pr-4 text-muted-foreground">{formatDateTime(execution.executed_at)}</td>
                     <td className="py-2 pr-4 text-right">{formatNumber(execution.quantity)}</td>
                     <td className="py-2 pr-4 text-right">{formatNumber(execution.price)}</td>
                     <td className="py-2 pr-4 text-right">{formatCurrency(execution.fees)}</td>
                     <td className="py-2 pr-4 text-muted-foreground">{execution.notes || "–"}</td>
+                    <td className="py-2 pr-4 text-right">
+                      <form action={deleteExecutionAction.bind(null, execution.id)}>
+                        <button type="submit" className="text-xs text-muted-foreground hover:text-negative">
+                          Löschen
+                        </button>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Noch keine Ausführungen erfasst. Executions folgen in Phase 4.
-          </p>
+          <p className="mb-4 text-sm text-muted-foreground">Noch keine Ausführungen erfasst.</p>
         )}
+        <ExecutionForm action={createExecutionAction} />
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-4">
