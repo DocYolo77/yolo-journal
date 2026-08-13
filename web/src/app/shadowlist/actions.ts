@@ -53,3 +53,52 @@ export async function saveShadowlistDecisionsAction(
 
   return { fieldErrors: {}, success: true };
 }
+
+export type SyncRequestState = { error: string | null };
+
+/**
+ * "Sync IBKR now" — the deployed app cannot call the
+ * Interactive_Brokers_IBKR MCP connector itself (see
+ * docs/ibkr-agent-sync-runbook.md), so this only records the request.
+ * The next scheduled sync Routine firing checks manual_sync_requests
+ * before its normal DST time-window guard and, if a pending row exists,
+ * runs immediately regardless of time of day.
+ */
+export async function requestIbkrSyncAction(
+  prevState: SyncRequestState,
+  formData: FormData
+): Promise<SyncRequestState> {
+  // Both params are unused but required so this action matches the
+  // (state, formData) => State signature useActionState expects.
+  void prevState;
+  void formData;
+
+  const supabase = getSupabaseAdmin();
+
+  try {
+    const { data: inserted, error: insertError } = await supabase
+      .from("manual_sync_requests")
+      .insert({ status: "pending" })
+      .select("id")
+      .single();
+
+    if (insertError || !inserted) {
+      console.error("requestIbkrSyncAction: insert failed", insertError);
+      return { error: "Sync-Anfrage konnte nicht gespeichert werden." };
+    }
+
+    await appendAuditEvent({
+      eventType: "ibkr_manual_sync_requested",
+      tradeDate: null,
+      entityType: "manual_sync_request",
+      entityId: inserted.id,
+      payload: null,
+    });
+  } catch (e) {
+    console.error("requestIbkrSyncAction failed", e);
+    return { error: "Sync-Anfrage konnte nicht gespeichert werden." };
+  }
+
+  revalidatePath("/shadowlist");
+  return { error: null };
+}

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { DecisionEditor } from "@/components/shadowlist/decision-editor";
+import { IbkrSyncButton } from "@/components/broker/ibkr-sync-button";
 import { getLatestCommitmentForDate } from "@/lib/data/commitments";
 import { computeShadowlistSummary, getOrCreateShadowlistDecisions } from "@/lib/data/shadowlist";
+import { getLatestSyncStatus } from "@/lib/data/broker-sync";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
-import { saveShadowlistDecisionsAction } from "./actions";
+import { requestIbkrSyncAction, saveShadowlistDecisionsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +36,22 @@ export default async function ShadowlistPage({
     </div>
   );
 
+  const syncStatusResult = await getLatestSyncStatus();
+  const syncButton = syncStatusResult.data ? (
+    <IbkrSyncButton
+      action={requestIbkrSyncAction}
+      lastRun={syncStatusResult.data.lastRun}
+      pendingRequest={syncStatusResult.data.pendingManualRequest}
+    />
+  ) : null;
+
   const commitmentResult = await getLatestCommitmentForDate(tradeDate);
 
   if (commitmentResult.error) {
     return (
       <div>
         <PageHeader title="Shadowlist" description="Stock Selection Audit" />
+        {syncButton}
         {dateNav}
         <p className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative">
           {commitmentResult.error}
@@ -54,6 +66,7 @@ export default async function ShadowlistPage({
     return (
       <div>
         <PageHeader title="Shadowlist" description="Stock Selection Audit" />
+        {syncButton}
         {dateNav}
         <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
           Kein gelocktes Commitment für dieses Datum. Die Shadowlist baut auf dem gelockten Pre-Market
@@ -74,6 +87,7 @@ export default async function ShadowlistPage({
     return (
       <div>
         <PageHeader title="Shadowlist" description="Stock Selection Audit" />
+        {syncButton}
         {dateNav}
         <p className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative">
           {decisionsResult.error}
@@ -92,6 +106,7 @@ export default async function ShadowlistPage({
         title="Shadowlist"
         description="Stock Selection Audit — vorab ausgewählte Namen getrennt von Execution und Management messen."
       />
+      {syncButton}
       {dateNav}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

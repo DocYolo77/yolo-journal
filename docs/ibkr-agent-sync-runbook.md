@@ -9,17 +9,29 @@ those only exist inside an agent's own tool-calling turn.
 
 Per the user's explicit choice (over building against the unverified IBKR
 Flex Web Service XML format), the sync runs as a **scheduled Claude agent
-turn** — a Routine (`mcp__Claude_Code_Remote__create_trigger`) that fires a
-fresh session, which calls the MCP tools itself, normalizes the results
-with the exact same pure functions the app ships
-(`web/src/lib/broker/ibkr-mcp-normalize.ts`,
+turn** — a Routine (`mcp__Claude_Code_Remote__create_trigger`) that calls
+the MCP tools itself, normalizes the results with the exact same pure
+functions the app ships (`web/src/lib/broker/ibkr-mcp-normalize.ts`,
 `web/src/lib/campaigns/reconcile.ts`), and writes to Supabase via
 `mcp__Supabase__execute_sql` (project `wrwbhvzcjnolixqiexpa`). Using the
 Supabase MCP connector directly — rather than `getSupabaseAdmin()` with a
 `SUPABASE_SECRET_KEY` env var — means the sync agent has no dependency on
-that secret being present in whatever container the Routine fires into;
-it only needs the Supabase MCP connector authorized on the account, same
-as this development session.
+that secret being present.
+
+The two daily Routines (`ibkr-daily-sync-edt-slot`,
+`ibkr-daily-sync-est-slot`) are **bound to this development session**
+(`persistent_session_id`), not `create_new_session_on_fire`. That was the
+original design, but this org rejects the `connectors` parameter on
+`create_trigger` ("the connectors parameter is not available for this
+organization") — a fresh-spawned session has no way to be granted the
+Interactive_Brokers_IBKR / Supabase connectors at all, which would make
+every firing fail immediately. Binding to this session instead means each
+firing resumes a session that already holds both connector
+authorizations. Tradeoff: the sync now shares this session's growing
+conversation history rather than starting clean each time. If this
+org-level restriction is later lifted, re-creating the Routines with
+`create_new_session_on_fire: true` + `connectors: ["Interactive Brokers
+(IBKR)", "Supabase"]` would be the cleaner long-term shape.
 
 To keep the normalization/reconciliation math itself as a single source
 of truth (never re-derived by hand in a prompt, never allowed to drift
@@ -55,6 +67,33 @@ for today's DST regime — it exits immediately as a no-op, before creating
 any `broker_sync_runs` row or touching the database. Exactly one of the
 two firings passes the guard on any given day, automatically flipping
 across the DST boundary with zero manual toggling.
+
+## Manual "Sync IBKR now" requests
+
+The Shadowlist page has a "Sync IBKR now" button
+(`web/src/components/broker/ibkr-sync-button.tsx`,
+`requestIbkrSyncAction` in `web/src/app/shadowlist/actions.ts`). The
+deployed Next.js app has the same fundamental limitation described above
+— it cannot call the IBKR MCP connector itself — so the button only
+inserts a `pending` row into `manual_sync_requests`
+(`20260813193000_create_manual_sync_requests.sql`); it does not run a
+sync immediately.
+
+Both daily Routine prompts check for a pending `manual_sync_requests` row
+**before** their DST time guard (Step -1, ahead of Step 0). If one
+exists, that firing skips the time guard entirely and runs the full sync
+regardless of time of day, then marks the request `status = 'completed'`
+with `broker_sync_run_id` pointing at the resulting run (or, if IBKR
+needs re-authorization, still marks it `completed` linked to the
+`failed` run — a request should never sit `picked_up` forever with
+nothing to show for it). This means a manual request is picked up at the
+*next* of the two daily firings — bounded to roughly 12 hours worst case,
+not instant. A true sub-hour "sync now" would need either an
+agent-turn-capable HTTP endpoint this sandbox doesn't have visibility
+into, or simply asking a Claude Code Remote session to call
+`mcp__Claude_Code_Remote__fire_trigger` directly on one of the two
+Routine ids — available today, no code involved, just not
+self-service from the web UI alone.
 
 ## What a sync run does, step by step
 
@@ -146,13 +185,6 @@ one — this may be remapped later without touching historical rows).
    unresolved prior position, steps 2/3/5 still run, but the final status
    is `partial`, never `success`.
 
-## Manual "Sync IBKR now" trigger
-
-Not built yet — tracked as a separate item (a Journal UI button/server
-action that fires this same Routine on demand via
-`mcp__Claude_Code_Remote__fire_trigger`, rather than duplicating the sync
-logic). Until then, the daily Routines are the only way this runs.
-
 ## Known gaps in the normalized data (see code comments for detail)
 
 `normalizeIbkrAccountSnapshot()` leaves several architecture-required
@@ -176,17 +208,20 @@ and can only be re-authorized interactively (via claude.ai connector
 settings) — a scheduled/unattended agent turn cannot do this itself. When
 this happens, a sync run correctly reports `status = 'failed'` per the
 rules above rather than silently doing nothing; there is currently no
-automated alert beyond that `broker_sync_runs` row (and whatever
-Routine-completion push/email notification is configured — see
-`create_trigger`'s `notifications` param). The user should periodically
-check `broker_sync_runs` (or the eventual "Sync IBKR now" UI) if daily
-data looks stale.
+automated alert beyond that `broker_sync_runs` row. Completion
+push/email notifications aren't available either — `create_trigger`
+rejects the `notifications` param for session-bound Routines (self-bind
+only supports it for `create_new_session_on_fire`). The user should
+periodically check `broker_sync_runs` or the Shadowlist page's sync
+status if daily data looks stale.
 
 ## Prerequisites
 
-- The Supabase MCP connector authorized on the account (already true for
-  this development session; the sync Routine's fresh sessions inherit
-  account-level MCP authorization, not a per-session secret).
+- This session (`persistent_session_id` the two Routines are bound to,
+  see "Why this exists as a runbook" above) must stay reachable and keep
+  holding the Supabase and Interactive_Brokers_IBKR connector
+  authorizations — both Routines resume it on every firing rather than
+  spawning a fresh session with its own connector grants.
 - The `Interactive_Brokers_IBKR` MCP connector authorized and *not
   expired* at firing time (see caveat above).
 - The `docyolo77/yolo-journal` repo checked out at a branch/commit that
