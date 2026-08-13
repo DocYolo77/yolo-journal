@@ -1,36 +1,62 @@
 import { PageHeader } from "@/components/layout/page-header";
+import { CommitmentForm } from "@/components/commitment/commitment-form";
+import { LockedCommitmentView } from "@/components/commitment/locked-commitment-view";
+import { getCurrentTradeDateET } from "@/lib/trade-date";
+import {
+  getLatestCommitmentForDate,
+  listRecentAuditEventsForTradeDate,
+  listRiskChanges,
+} from "@/lib/data/commitments";
+import { lockAction, reduceRiskAction, saveDraftAction } from "./actions";
 
-const PLACEHOLDER_METRICS = [
-  { label: "Trades gesamt" },
-  { label: "Offene Trades" },
-  { label: "Win Rate" },
-  { label: "Net P&L" },
-];
+// Always reflects the live state of today's commitment; never a
+// build-time snapshot.
+export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function PreMarketCommitmentPage() {
+  const tradeDate = getCurrentTradeDateET();
+
+  const commitmentResult = await getLatestCommitmentForDate(tradeDate);
+
+  if (commitmentResult.error) {
+    return (
+      <div>
+        <PageHeader title="Pre-Market Commitment" description={`Trade-Datum: ${tradeDate}`} />
+        <p className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative">
+          {commitmentResult.error}
+        </p>
+      </div>
+    );
+  }
+
+  const commitment = commitmentResult.data;
+
+  if (commitment && commitment.status === "LOCKED") {
+    const [riskChangesResult, auditEventsResult] = await Promise.all([
+      listRiskChanges(commitment.id),
+      listRecentAuditEventsForTradeDate(tradeDate),
+    ]);
+
+    return (
+      <div>
+        <PageHeader title="Pre-Market Commitment" description={`Trade-Datum: ${tradeDate}`} />
+        <LockedCommitmentView
+          commitment={commitment}
+          riskChanges={riskChangesResult.data ?? []}
+          auditEvents={auditEventsResult.data ?? []}
+          reduceRiskAction={reduceRiskAction}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
-        title="Dashboard"
-        description="Überblick über deine Trading-Performance."
+        title="Pre-Market Commitment"
+        description={`Trade-Datum: ${tradeDate} · Sieben Pflichtfelder, versionierter Lock, nur abwärts veränderbares Intraday-Risiko.`}
       />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {PLACEHOLDER_METRICS.map((metric) => (
-          <div
-            key={metric.label}
-            className="rounded-lg border border-border bg-surface p-4"
-          >
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {metric.label}
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">–</p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-        Kennzahlen werden angezeigt, sobald Trades erfasst wurden (ab Phase
-        3, ausgewertet in Phase 7).
-      </div>
+      <CommitmentForm action={saveDraftAction} lockAction={lockAction} existing={commitment} />
     </div>
   );
 }
