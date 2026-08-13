@@ -146,3 +146,72 @@ export type ShadowlistDecisionRow = {
   created_at: string;
   updated_at: string;
 };
+
+// 20260813200000_create_daily_reviews.sql
+
+export type GuardrailStatus = "Eingehalten" | "Verletzt" | "Nicht anwendbar";
+
+export type GuardrailEntry = {
+  guardrail_id: string;
+  guardrail: string;
+  status: GuardrailStatus | "";
+  comment: string;
+};
+
+export type MentalStatus = {
+  states: string[];
+  other_state: string;
+  focus: number | null;
+  influence: string;
+  influence_note: string;
+};
+
+export type TickerReview = {
+  ticker: string;
+  setup: string;
+  trigger: string;
+  structure: string;
+  structure_rating: string;
+  thesis: string;
+  intended_stop_logic: string;
+  management_intent: string;
+  management_grade: string;
+  rule_status: string;
+  notes: string;
+};
+
+export type DailyReviewStatus = "DRAFT" | "COMPLETED";
+export type DailyReviewType = "ENTRY" | "MANAGEMENT";
+
+export type DailyReviewRow = {
+  id: string;
+  user_id: string | null;
+
+  trade_date: string;
+  review_type: DailyReviewType | null;
+  status: DailyReviewStatus;
+
+  is_reconstructed: boolean;
+  commitment_id: string | null;
+
+  net_liquidation_value: number | null;
+  daily_pnl: number | null;
+
+  market_thought: string | null;
+  market_environment: string | null;
+
+  guardrails: GuardrailEntry[];
+  mental: MentalStatus;
+
+  positive: string | null;
+  weakness: string | null;
+  coaching_take: string | null;
+  self_grade: string | null;
+  grade_reason: string | null;
+  operational_todos: string[];
+
+  ticker_reviews: TickerReview[];
+
+  created_at: string;
+  updated_at: string;
+};

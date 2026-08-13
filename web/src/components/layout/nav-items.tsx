@@ -17,9 +17,15 @@ const iconProps = {
   strokeLinejoin: "round" as const,
 };
 
-// Matches the legacy Journal OS V7.4.3 top-level sections exactly — see
-// LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md §1. Pre-Market Commitment is the
-// first-class home workflow, hence href "/".
+// Beta scope: only these four P0 workflows are wired up end-to-end.
+// Weekly/Monthly Review, Rules & Timeline, and Google Drive Export are
+// explicitly P1 (post-Beta) — their routes still exist as placeholders
+// but are intentionally not linked from nav until they're real, per the
+// "funktional > schön" beta instruction (hidden rather than shown as
+// dead "coming later" links). Pre-Market Commitment is the first-class
+// home workflow, hence href "/". See
+// LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md §1 for the full legacy nav this
+// will grow back into after the Beta.
 export const NAV_ITEMS: NavItem[] = [
   {
     href: "/",
@@ -54,28 +60,6 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
-    href: "/weekly-review",
-    label: "Weekly Review",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18" />
-        <path d="M8 3v3M16 3v3" />
-        <path d="M7 13h3M14 13h3M7 17h3" />
-      </svg>
-    ),
-  },
-  {
-    href: "/monthly-review",
-    label: "Monthly Review",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <path d="M4 19V9l5-3 5 3 5-3v10l-5 3-5-3-5 3Z" />
-        <path d="M9 6v10M14 9v10" />
-      </svg>
-    ),
-  },
-  {
     href: "/archive",
     label: "Archiv",
     icon: (
@@ -86,27 +70,14 @@ export const NAV_ITEMS: NavItem[] = [
       </svg>
     ),
   },
-  {
-    href: "/rules-timeline",
-    label: "Rules & Timeline",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <path d="M4 4v16" />
-        <circle cx="4" cy="7" r="1.5" fill="currentColor" stroke="none" />
-        <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
-        <circle cx="4" cy="17" r="1.5" fill="currentColor" stroke="none" />
-        <path d="M9 7h11M9 12h11M9 17h11" />
-      </svg>
-    ),
-  },
-  {
-    href: "/drive-export",
-    label: "Google Drive Export",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <path d="M8 3h8l6 10-4 7H6l-4-7Z" />
-        <path d="M8 3l6 10M10 20l4-7" />
-      </svg>
-    ),
-  },
+];
+
+// P1 — not linked in the Beta nav, routes still exist as placeholders.
+// href kept here (not in NAV_ITEMS) so a future phase can re-add them
+// without redesigning this file.
+export const COMING_LATER_ROUTES = [
+  "/weekly-review",
+  "/monthly-review",
+  "/rules-timeline",
+  "/drive-export",
 ];
