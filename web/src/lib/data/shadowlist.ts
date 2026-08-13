@@ -1,19 +1,15 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { ShadowlistDecisionRow } from "@/lib/supabase/types";
 import type { CommitmentWithChildren } from "@/lib/data/commitments";
+import { appendAuditEvent } from "@/lib/audit";
 
 /**
  * Returns the shadowlist decision rows for a locked commitment, seeding
  * one row per committed-watchlist ticker on first access so nothing has
- * to be re-typed by hand. Idempotent: re-running with existing rows is a
- * no-op for tickers that already have a decision.
- *
- * IBKR auto-force ("if the ticker was actually traded, force
- * actually_traded=true / decision=Genommen" — §6.1) is intentionally not
- * wired up yet: there is no broker execution data source in this
- * environment to check against. Once broker_executions exists and is
- * populated, this function is the place to apply that override before
- * returning.
+ * to be re-typed by hand, then applying the IBKR auto-override (§6.1)
+ * before returning. Idempotent: re-running with existing rows is a no-op
+ * for tickers that already have a decision and are already marked
+ * traded.
  */
 export async function getOrCreateShadowlistDecisions(
   commitment: CommitmentWithChildren
@@ -61,11 +57,116 @@ export async function getOrCreateShadowlistDecisions(
     const orderByTicker = new Map(commitment.watchlist.map((item, index) => [item.ticker, index]));
     all.sort((a, b) => (orderByTicker.get(a.ticker) ?? 0) - (orderByTicker.get(b.ticker) ?? 0));
 
-    return { data: all, error: null };
+    const overridden = await applyIbkrAutoOverride(commitment, all);
+    if (!overridden.data) {
+      return overridden;
+    }
+
+    return { data: overridden.data, error: null };
   } catch (e) {
     console.error("getOrCreateShadowlistDecisions failed", e);
     return { data: null, error: "Shadowlist konnte nicht geladen werden." };
   }
+}
+
+/**
+ * IBKR auto-force (§6.1): if a `campaigns` row exists for a committed
+ * ticker on this trade_date — i.e. the broker sync reconciled at least
+ * one real fill into a campaign for it — the ticker was actually traded
+ * regardless of what the shadowlist decision currently says, and the
+ * decision is force-corrected to actually_traded=true /
+ * decision='Genommen'. Checking `campaigns` (not raw `broker_executions`)
+ * deliberately follows "Ticker statt Klicks zählen" — the economic
+ * grouping is the source of truth, not individual fills.
+ *
+ * Every actual correction is written to the audit_events ledger via
+ * `shadowlist_auto_overridden`, including whether the row already carried
+ * a human-entered decision/reason/notes at the time
+ * (`had_prior_manual_input`), so a case where the trader explicitly
+ * logged "not taken" but the broker disagrees is never silently lost.
+ * If the audit write fails after the row update succeeded, this reports
+ * an error rather than treating the override as silently complete — a
+ * partial failure here must never look like success.
+ */
+async function applyIbkrAutoOverride(
+  commitment: CommitmentWithChildren,
+  decisions: ShadowlistDecisionRow[]
+): Promise<{ data: ShadowlistDecisionRow[]; error: null } | { data: null; error: string }> {
+  if (decisions.length === 0) {
+    return { data: decisions, error: null };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const tickers = decisions.map((d) => d.ticker);
+
+  const { data: tradedCampaigns, error: campaignsError } = await supabase
+    .from("campaigns")
+    .select("symbol")
+    .eq("trade_date", commitment.trade_date)
+    .in("symbol", tickers);
+
+  if (campaignsError) {
+    console.error("applyIbkrAutoOverride: campaign lookup failed", campaignsError);
+    return { data: null, error: "Shadowlist-Abgleich mit Broker-Daten fehlgeschlagen." };
+  }
+
+  const tradedTickers = new Set((tradedCampaigns ?? []).map((c) => c.symbol as string));
+  if (tradedTickers.size === 0) {
+    return { data: decisions, error: null };
+  }
+
+  const result: ShadowlistDecisionRow[] = [];
+
+  for (const decision of decisions) {
+    const alreadyCorrect = decision.actually_traded && decision.decision === "Genommen";
+    if (!tradedTickers.has(decision.ticker) || alreadyCorrect) {
+      result.push(decision);
+      continue;
+    }
+
+    const hadPriorManualInput =
+      decision.decision === "Genommen" || decision.reason !== null || decision.notes !== null;
+
+    const { data: updated, error: updateError } = await supabase
+      .from("shadowlist_decisions")
+      .update({ actually_traded: true, decision: "Genommen" })
+      .eq("id", decision.id)
+      .select("*")
+      .single();
+
+    if (updateError || !updated) {
+      console.error("applyIbkrAutoOverride: update failed", updateError);
+      return { data: null, error: "Shadowlist-Auto-Override konnte nicht gespeichert werden." };
+    }
+
+    const { error: auditError } = await appendAuditEvent({
+      eventType: "shadowlist_auto_overridden",
+      tradeDate: commitment.trade_date,
+      entityType: "shadowlist_decision",
+      entityId: decision.id,
+      actor: "ibkr_sync",
+      payload: {
+        ticker: decision.ticker,
+        commitment_id: commitment.id,
+        previous_actually_traded: decision.actually_traded,
+        previous_decision: decision.decision,
+        previous_reason: decision.reason,
+        had_prior_manual_input: hadPriorManualInput,
+      },
+    });
+
+    if (auditError) {
+      console.error("applyIbkrAutoOverride: audit event failed", auditError);
+      return {
+        data: null,
+        error: "Shadowlist wurde aktualisiert, aber das Audit-Event konnte nicht gespeichert werden.",
+      };
+    }
+
+    result.push(updated);
+  }
+
+  return { data: result, error: null };
 }
 
 export type ShadowlistSummary = {
