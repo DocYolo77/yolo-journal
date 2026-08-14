@@ -1,12 +1,17 @@
 "use client";
 
 import {
+  ENTRY_TACTIC_OPTIONS,
+  EXIT_SETUP_OPTIONS,
+  EXIT_TACTIC_OPTIONS,
   MANAGEMENT_GRADE_OPTIONS,
+  ORB_ENTRY_TACTICS,
+  ORL_RESTRICTED_STOP_OPTIONS,
   RULE_STATUS_OPTIONS,
   SETUP_OPTIONS,
+  STOP_PLACEMENT_OPTIONS,
   STRUCTURE_OPTIONS,
   STRUCTURE_RATING_OPTIONS,
-  TRIGGER_OPTIONS,
 } from "@/lib/validation/daily-review";
 import type { TickerReview } from "@/lib/supabase/types";
 
@@ -17,16 +22,23 @@ function emptyTickerReview(ticker: string): TickerReview {
   return {
     ticker,
     setup: "",
-    trigger: "",
+    entry_tactic: "",
+    stop_placement: "",
+    stop_placement_pct: null,
     structure: "",
     structure_rating: "",
     thesis: "",
-    intended_stop_logic: "",
-    management_intent: "",
     management_grade: "",
     rule_status: "",
     notes: "",
+    exit_setup: "",
+    exit_tactic: "",
   };
+}
+
+function availableStopPlacementOptions(entryTactic: string): string[] {
+  if (ORB_ENTRY_TACTICS.includes(entryTactic)) return STOP_PLACEMENT_OPTIONS;
+  return STOP_PLACEMENT_OPTIONS.filter((o) => !ORL_RESTRICTED_STOP_OPTIONS.includes(o));
 }
 
 function SelectField({
@@ -87,7 +99,25 @@ export function TickerReviewEditor({
   const addableSuggestions = suggestedTickers.filter((t) => !existingTickers.has(t));
 
   function updateRow(index: number, patch: Partial<TickerReview>) {
-    onChange(value.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    onChange(
+      value.map((row, i) => {
+        if (i !== index) return row;
+        const next = { ...row, ...patch };
+        // An ORL stop only makes sense relative to an ORB entry — drop it
+        // if the entry tactic no longer qualifies.
+        if (
+          "entry_tactic" in patch &&
+          !ORB_ENTRY_TACTICS.includes(next.entry_tactic) &&
+          ORL_RESTRICTED_STOP_OPTIONS.includes(next.stop_placement)
+        ) {
+          next.stop_placement = "";
+        }
+        if (next.stop_placement !== "%-Stop") {
+          next.stop_placement_pct = null;
+        }
+        return next;
+      })
+    );
   }
 
   function removeRow(index: number) {
@@ -139,11 +169,33 @@ export function TickerReviewEditor({
                 options={SETUP_OPTIONS}
               />
               <SelectField
-                label="Trigger"
-                value={row.trigger}
-                onChange={(v) => updateRow(index, { trigger: v })}
-                options={TRIGGER_OPTIONS}
+                label="Entry-Taktik"
+                value={row.entry_tactic}
+                onChange={(v) => updateRow(index, { entry_tactic: v })}
+                options={ENTRY_TACTIC_OPTIONS}
               />
+              <SelectField
+                label="Stop Placement"
+                value={row.stop_placement}
+                onChange={(v) => updateRow(index, { stop_placement: v })}
+                options={availableStopPlacementOptions(row.entry_tactic)}
+              />
+              {row.stop_placement === "%-Stop" ? (
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Stop %
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={row.stop_placement_pct ?? ""}
+                    onChange={(e) =>
+                      updateRow(index, {
+                        stop_placement_pct: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+              ) : null}
               <SelectField
                 label="Structure"
                 value={row.structure}
@@ -168,20 +220,26 @@ export function TickerReviewEditor({
                 onChange={(v) => updateRow(index, { rule_status: v })}
                 options={RULE_STATUS_OPTIONS}
               />
+              <SelectField
+                label="Exit Setup"
+                value={row.exit_setup}
+                onChange={(v) => updateRow(index, { exit_setup: v })}
+                options={EXIT_SETUP_OPTIONS}
+              />
+              <SelectField
+                label="Exit Taktik"
+                value={row.exit_tactic}
+                onChange={(v) => updateRow(index, { exit_tactic: v })}
+                options={EXIT_TACTIC_OPTIONS}
+              />
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <TextField label="Thesis" value={row.thesis} onChange={(v) => updateRow(index, { thesis: v })} />
               <TextField
-                label="Intended Stop Logic"
-                value={row.intended_stop_logic}
-                onChange={(v) => updateRow(index, { intended_stop_logic: v })}
+                label="Outcome D0 / Notes"
+                value={row.notes}
+                onChange={(v) => updateRow(index, { notes: v })}
               />
-              <TextField
-                label="Management Intent"
-                value={row.management_intent}
-                onChange={(v) => updateRow(index, { management_intent: v })}
-              />
-              <TextField label="Notes" value={row.notes} onChange={(v) => updateRow(index, { notes: v })} />
             </div>
           </div>
         ))}

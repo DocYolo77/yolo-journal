@@ -164,22 +164,23 @@ export type MentalStatus = {
   states: string[];
   other_state: string;
   focus: number | null;
-  influence: string;
   influence_note: string;
 };
 
 export type TickerReview = {
   ticker: string;
   setup: string;
-  trigger: string;
+  entry_tactic: string;
+  stop_placement: string;
+  stop_placement_pct: number | null;
   structure: string;
   structure_rating: string;
   thesis: string;
-  intended_stop_logic: string;
-  management_intent: string;
   management_grade: string;
   rule_status: string;
   notes: string;
+  exit_setup: string;
+  exit_tactic: string;
 };
 
 export type DailyReviewStatus = "DRAFT" | "COMPLETED";
@@ -203,6 +204,7 @@ export type DailyReviewRow = {
   market_environment: string | null;
 
   guardrails: GuardrailEntry[];
+  guardrails_reviewed: boolean;
   mental: MentalStatus;
 
   positive: string | null;
@@ -211,6 +213,7 @@ export type DailyReviewRow = {
   self_grade: string | null;
   grade_reason: string | null;
   operational_todos: string[];
+  shadowlist_comment: string | null;
 
   ticker_reviews: TickerReview[];
 

@@ -132,6 +132,9 @@ export function DailyReportPdfDocument({
           ) : (
             <Text style={styles.paragraph}>Keine Shadowlist-Einträge.</Text>
           )}
+          {review.shadowlist_comment ? (
+            <Text style={styles.paragraph}>Stellungnahme: {review.shadowlist_comment}</Text>
+          ) : null}
         </Section>
 
         <Section title="Guardrails">
@@ -161,13 +164,25 @@ export function DailyReportPdfDocument({
               <View key={t.ticker} style={styles.tickerBlock}>
                 <Text style={styles.sectionTitle}>{t.ticker}</Text>
                 <DetailRow label="Setup" value={t.setup || "–"} />
-                <DetailRow label="Trigger" value={t.trigger || "–"} />
+                <DetailRow label="Entry-Taktik" value={t.entry_tactic || "–"} />
+                <DetailRow
+                  label="Stop Placement"
+                  value={
+                    t.stop_placement
+                      ? t.stop_placement === "%-Stop" && t.stop_placement_pct != null
+                        ? `${t.stop_placement} (${t.stop_placement_pct}%)`
+                        : t.stop_placement
+                      : "–"
+                  }
+                />
                 <DetailRow label="Structure" value={t.structure || "–"} />
                 <DetailRow label="Structure Rating" value={t.structure_rating || "–"} />
                 <DetailRow label="Management Grade" value={t.management_grade || "–"} />
                 <DetailRow label="Rule Status" value={t.rule_status || "–"} />
+                <DetailRow label="Exit Setup" value={t.exit_setup || "–"} />
+                <DetailRow label="Exit Taktik" value={t.exit_tactic || "–"} />
                 {t.thesis ? <Text style={styles.paragraph}>Thesis: {t.thesis}</Text> : null}
-                {t.notes ? <Text style={styles.paragraph}>Notes: {t.notes}</Text> : null}
+                {t.notes ? <Text style={styles.paragraph}>Outcome D0 / Notes: {t.notes}</Text> : null}
                 {chart ? (
                   <>
                     <Image src={chart.dailyDataUri} style={styles.chartImage} />

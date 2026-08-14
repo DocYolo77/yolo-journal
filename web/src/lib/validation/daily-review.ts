@@ -12,44 +12,33 @@ import type {
 
 export const REVIEW_TYPES: DailyReviewType[] = ["ENTRY", "MANAGEMENT"];
 
-export const SETUP_OPTIONS = [
-  "Breakout",
-  "Pullback",
-  "Episodic Pivot",
-  "Undercut & Reclaim",
-  "M5 ORB",
-  "M15 ORB",
-  "M30 ORB",
-  "Dip / MACD",
-  "Push-out PDH",
-  "FTD",
+export const SETUP_OPTIONS = ["Breakout", "Pullback", "Episodic Pivot"];
+
+// "Trigger" renamed to "Entry-Taktik" per user correction — the ORB
+// entries (M30/M15/M5) are the ones that gate which Stop Placement
+// options are selectable, see ORB_ENTRY_TACTICS below.
+export const ENTRY_TACTIC_OPTIONS = ["M30 ORB", "M15 ORB", "M5 ORB", "PDH BO", "PDL Pullback", "EMA Pullback"];
+
+export const ORB_ENTRY_TACTICS = ["M30 ORB", "M15 ORB", "M5 ORB"];
+
+export const STOP_PLACEMENT_OPTIONS = [
+  "2-Stops ORL",
+  "1-Stop ORL",
+  "2-Stops Session Low",
+  "1-Stop Session Low",
+  "%-Stop",
   "Sonstiges",
 ];
 
-export const TRIGGER_OPTIONS = [
-  "M5 ORH",
-  "M15 ORH",
-  "M30 ORH",
-  "PDH Break",
-  "PDL Undercut & Reclaim",
-  "EMA10 Reclaim",
-  "EMA20 Reclaim",
-  "MACD Cross",
-  "Diskretionär innerhalb Framework",
-  "Sonstiges",
-];
+// Only selectable when Entry-Taktik is one of ORB_ENTRY_TACTICS — an ORL
+// (opening-range low) stop only makes sense relative to an ORB entry.
+export const ORL_RESTRICTED_STOP_OPTIONS = ["2-Stops ORL", "1-Stop ORL"];
 
-export const STRUCTURE_OPTIONS = [
-  "Base",
-  "Pullback",
-  "Handle",
-  "Double Bottom",
-  "Flat Base",
-  "VCP",
-  "Episodic Pivot",
-  "FTD",
-  "Sonstiges",
-];
+export const EXIT_SETUP_OPTIONS = ["Close < EMA10", "Sonstiges"];
+
+export const EXIT_TACTIC_OPTIONS = ["M5 ORL", "Random", "Sonstiges"];
+
+export const STRUCTURE_OPTIONS = ["Wedge Pop", "Momentum Pullback", "HTF Pullback", "Flat Base", "Episodic Pivot"];
 
 export const STRUCTURE_RATING_OPTIONS = ["Vorläufig", "A+", "A", "B", "C", "Kein Setup"];
 
@@ -98,6 +87,7 @@ export type DailyReviewInput = {
   market_thought: string | null;
   market_environment: string | null;
   guardrails: GuardrailEntry[];
+  guardrails_reviewed: boolean;
   mental: MentalStatus;
   positive: string | null;
   weakness: string | null;
@@ -105,8 +95,34 @@ export type DailyReviewInput = {
   self_grade: string | null;
   grade_reason: string | null;
   operational_todos: string[];
+  shadowlist_comment: string | null;
   ticker_reviews: TickerReview[];
 };
+
+/**
+ * Normalizes a ticker review row loaded from storage or the client into
+ * the current TickerReview shape. Falls back to the pre-correction
+ * `trigger` key for `entry_tactic` so ticker reviews saved before this
+ * pass keep their values instead of silently losing them.
+ */
+export function normalizeTickerReview(row: Partial<TickerReview> & Record<string, unknown>): TickerReview {
+  const rawStopPct = row.stop_placement_pct;
+  return {
+    ticker: (row.ticker ?? "").toString().trim().toUpperCase(),
+    setup: (row.setup ?? "").toString(),
+    entry_tactic: (row.entry_tactic ?? row.trigger ?? "").toString(),
+    stop_placement: (row.stop_placement ?? "").toString(),
+    stop_placement_pct: typeof rawStopPct === "number" && Number.isFinite(rawStopPct) ? rawStopPct : null,
+    structure: (row.structure ?? "").toString(),
+    structure_rating: (row.structure_rating ?? "").toString(),
+    thesis: (row.thesis ?? "").toString().trim(),
+    management_grade: (row.management_grade ?? "").toString(),
+    rule_status: (row.rule_status ?? "").toString(),
+    notes: (row.notes ?? "").toString().trim(),
+    exit_setup: (row.exit_setup ?? "").toString(),
+    exit_tactic: (row.exit_tactic ?? "").toString(),
+  };
+}
 
 export type DailyReviewFormState = {
   fieldErrors: Partial<Record<string, string>>;
@@ -185,10 +201,15 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
     return {
       guardrail_id: canonical.id,
       guardrail: canonical.label,
-      status: (existing?.status as GuardrailEntry["status"]) ?? "",
+      // Guardrails default to "Eingehalten" — the explicit
+      // "Guardrails geprüft?" checkbox (guardrails_reviewed), not a
+      // blank status, is the real confirmation signal.
+      status: (existing?.status as GuardrailEntry["status"]) || "Eingehalten",
       comment: (existing?.comment ?? "").toString().trim(),
     };
   });
+
+  const guardrailsReviewed = readString(formData, "guardrailsReviewed") === "true";
 
   const rawMental = parseJson<Partial<MentalStatus>>(formData, "mentalJson", {});
   const focusRaw = rawMental.focus;
@@ -205,7 +226,6 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
     states: Array.isArray(rawMental.states) ? rawMental.states.filter((s) => typeof s === "string") : [],
     other_state: (rawMental.other_state ?? "").toString().trim(),
     focus,
-    influence: (rawMental.influence ?? "").toString().trim(),
     influence_note: (rawMental.influence_note ?? "").toString().trim(),
   };
 
@@ -214,36 +234,28 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
   const coachingTake = readString(formData, "coachingTake");
   const selfGrade = readString(formData, "selfGrade");
   const gradeReason = readString(formData, "gradeReason");
+  const shadowlistComment = readString(formData, "shadowlistComment");
 
   const rawTodos = parseJson<string[]>(formData, "operationalTodosJson", []);
   const operationalTodos = rawTodos.map((t) => t.trim()).filter(Boolean);
 
-  const rawTickerReviews = parseJson<TickerReview[]>(formData, "tickerReviewsJson", []);
+  const rawTickerReviews = parseJson<(Partial<TickerReview> & Record<string, unknown>)[]>(
+    formData,
+    "tickerReviewsJson",
+    []
+  );
   const tickerReviews: TickerReview[] = [];
   const seenTickers = new Set<string>();
 
   rawTickerReviews.forEach((row, index) => {
-    const ticker = (row.ticker ?? "").trim().toUpperCase();
-    if (!ticker) return;
-    if (seenTickers.has(ticker)) {
-      fieldErrors.tickerReviews = `Ticker-Review ${index + 1}: ${ticker} ist doppelt.`;
+    const normalized = normalizeTickerReview(row);
+    if (!normalized.ticker) return;
+    if (seenTickers.has(normalized.ticker)) {
+      fieldErrors.tickerReviews = `Ticker-Review ${index + 1}: ${normalized.ticker} ist doppelt.`;
       return;
     }
-    seenTickers.add(ticker);
-
-    tickerReviews.push({
-      ticker,
-      setup: (row.setup ?? "").toString(),
-      trigger: (row.trigger ?? "").toString(),
-      structure: (row.structure ?? "").toString(),
-      structure_rating: (row.structure_rating ?? "").toString(),
-      thesis: (row.thesis ?? "").toString().trim(),
-      intended_stop_logic: (row.intended_stop_logic ?? "").toString().trim(),
-      management_intent: (row.management_intent ?? "").toString().trim(),
-      management_grade: (row.management_grade ?? "").toString(),
-      rule_status: (row.rule_status ?? "").toString(),
-      notes: (row.notes ?? "").toString().trim(),
-    });
+    seenTickers.add(normalized.ticker);
+    tickerReviews.push(normalized);
   });
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -260,6 +272,7 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
       market_thought: marketThought || null,
       market_environment: marketEnvironment || null,
       guardrails,
+      guardrails_reviewed: guardrailsReviewed,
       mental,
       positive: positive || null,
       weakness: weakness || null,
@@ -267,6 +280,7 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
       self_grade: selfGrade || null,
       grade_reason: gradeReason || null,
       operational_todos: operationalTodos,
+      shadowlist_comment: shadowlistComment || null,
       ticker_reviews: tickerReviews,
     },
   };

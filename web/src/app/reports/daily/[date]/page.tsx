@@ -154,6 +154,11 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
         ) : (
           <p className="text-sm text-muted-foreground">Keine Shadowlist-Einträge.</p>
         )}
+        {review.shadowlist_comment ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Stellungnahme: {review.shadowlist_comment}
+          </p>
+        ) : null}
       </Section>
 
       <Section title="Ticker Reviews">
@@ -167,21 +172,27 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
                   <DetailGrid
                     items={[
                       ["Setup", t.setup || "–"],
-                      ["Trigger", t.trigger || "–"],
+                      ["Entry-Taktik", t.entry_tactic || "–"],
+                      [
+                        "Stop Placement",
+                        t.stop_placement
+                          ? t.stop_placement === "%-Stop" && t.stop_placement_pct != null
+                            ? `${t.stop_placement} (${t.stop_placement_pct}%)`
+                            : t.stop_placement
+                          : "–",
+                      ],
                       ["Structure", t.structure || "–"],
                       ["Structure Rating", t.structure_rating || "–"],
                       ["Management Grade", t.management_grade || "–"],
                       ["Rule Status", t.rule_status || "–"],
+                      ["Exit Setup", t.exit_setup || "–"],
+                      ["Exit Taktik", t.exit_tactic || "–"],
                     ]}
                   />
                   {t.thesis ? <p className="mt-2 text-sm text-muted-foreground">Thesis: {t.thesis}</p> : null}
-                  {t.intended_stop_logic ? (
-                    <p className="text-sm text-muted-foreground">Stop-Logik: {t.intended_stop_logic}</p>
+                  {t.notes ? (
+                    <p className="text-sm text-muted-foreground">Outcome D0 / Notes: {t.notes}</p>
                   ) : null}
-                  {t.management_intent ? (
-                    <p className="text-sm text-muted-foreground">Management Intent: {t.management_intent}</p>
-                  ) : null}
-                  {t.notes ? <p className="text-sm text-muted-foreground">Notes: {t.notes}</p> : null}
 
                   {chart ? (
                     <div className="mt-3 space-y-3">
@@ -228,7 +239,6 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
           items={[
             ["Mental States", review.mental.states.join(", ") || "–"],
             ["Focus (1-5)", review.mental.focus != null ? String(review.mental.focus) : "–"],
-            ["Influence", review.mental.influence || "–"],
             ["Self Grade", review.self_grade || "–"],
           ]}
         />

@@ -23,7 +23,9 @@ function defaultGuardrails(existing: GuardrailEntry[] | undefined): GuardrailEnt
     return {
       guardrail_id: c.id,
       guardrail: c.label,
-      status: found?.status ?? "",
+      // Pre-marked "Eingehalten" — the "Guardrails geprüft?" checkbox
+      // below is the actual confirmation gate, not this status.
+      status: found?.status || "Eingehalten",
       comment: found?.comment ?? "",
     };
   });
@@ -34,7 +36,6 @@ function defaultMental(existing: MentalStatus | undefined): MentalStatus {
     states: existing?.states ?? [],
     other_state: existing?.other_state ?? "",
     focus: existing?.focus ?? null,
-    influence: existing?.influence ?? "",
     influence_note: existing?.influence_note ?? "",
   };
 }
@@ -53,6 +54,7 @@ export function DailyReviewForm({
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
 
   const [guardrails, setGuardrails] = useState<GuardrailEntry[]>(() => defaultGuardrails(review?.guardrails));
+  const [guardrailsReviewed, setGuardrailsReviewed] = useState(review?.guardrails_reviewed ?? false);
   const [mental, setMental] = useState<MentalStatus>(() => defaultMental(review?.mental));
   const [todos, setTodos] = useState<string[]>(() => review?.operational_todos ?? []);
   const [newTodo, setNewTodo] = useState("");
@@ -88,6 +90,7 @@ export function DailyReviewForm({
       ) : null}
 
       <input type="hidden" name="guardrailsJson" value={JSON.stringify(guardrails)} readOnly />
+      <input type="hidden" name="guardrailsReviewed" value={guardrailsReviewed ? "true" : "false"} readOnly />
       <input type="hidden" name="mentalJson" value={JSON.stringify(mental)} readOnly />
       <input type="hidden" name="operationalTodosJson" value={JSON.stringify(todos)} readOnly />
       <input type="hidden" name="tickerReviewsJson" value={JSON.stringify(tickerReviews)} readOnly />
@@ -178,6 +181,19 @@ export function DailyReviewForm({
             </div>
           ))}
         </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <input
+            type="checkbox"
+            checked={guardrailsReviewed}
+            onChange={(e) => setGuardrailsReviewed(e.target.checked)}
+          />
+          Guardrails geprüft?
+        </label>
+        {!guardrailsReviewed ? (
+          <p className="text-xs text-muted-foreground">
+            Muss angekreuzt und gespeichert sein, bevor der Review abgeschlossen werden kann.
+          </p>
+        ) : null}
       </Section>
 
       <Section title="Mental">
@@ -206,33 +222,22 @@ export function DailyReviewForm({
             className={inputClass}
           />
         ) : null}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-            Focus (1–5)
-            <select
-              value={mental.focus ?? ""}
-              onChange={(e) => setMental((m) => ({ ...m, focus: e.target.value ? Number(e.target.value) : null }))}
-              className={inputClass}
-            >
-              <option value="">–</option>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-            {errors.mentalFocus ? <span className="text-xs text-negative">{errors.mentalFocus}</span> : null}
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
-            Influence
-            <input
-              type="text"
-              value={mental.influence}
-              onChange={(e) => setMental((m) => ({ ...m, influence: e.target.value }))}
-              className={inputClass}
-            />
-          </label>
-        </div>
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground sm:max-w-xs">
+          Focus (1–5)
+          <select
+            value={mental.focus ?? ""}
+            onChange={(e) => setMental((m) => ({ ...m, focus: e.target.value ? Number(e.target.value) : null }))}
+            className={inputClass}
+          >
+            <option value="">–</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          {errors.mentalFocus ? <span className="text-xs text-negative">{errors.mentalFocus}</span> : null}
+        </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground">
           Note
           <textarea
@@ -244,6 +249,15 @@ export function DailyReviewForm({
         </label>
       </Section>
 
+      <Section title="Shadowlist">
+        <FieldTextarea
+          name="shadowlistComment"
+          label="Stellungnahme zur Shadowlist (optional)"
+          placeholder="Warum wurden bestimmte Werte nicht genommen?"
+          defaultValue={review?.shadowlist_comment ?? ""}
+        />
+      </Section>
+
       <Section title="Abschluss">
         <FieldTextarea name="positive" label="Positive" defaultValue={review?.positive ?? ""} />
         <FieldTextarea name="weakness" label="Weakness" defaultValue={review?.weakness ?? ""} />
@@ -253,7 +267,7 @@ export function DailyReviewForm({
           <FieldText name="gradeReason" label="Grade Reason" defaultValue={review?.grade_reason ?? ""} />
         </div>
         <div className="space-y-2">
-          <span className="text-sm font-medium text-foreground">Operational Todos</span>
+          <span className="text-sm font-medium text-foreground">Was willst du konkret verbessern?</span>
           <div className="flex gap-2">
             <input
               type="text"
@@ -265,7 +279,7 @@ export function DailyReviewForm({
                   addTodo();
                 }
               }}
-              placeholder="Todo hinzufügen"
+              placeholder="Verbesserung hinzufügen"
               className={`flex-1 ${inputClass}`}
             />
             <button type="button" onClick={addTodo} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-hover">

@@ -132,6 +132,12 @@ export async function finalizeDailyReview(
     if (!review) {
       return { data: null, error: "Kein Daily Review für dieses Datum vorhanden — zuerst speichern." };
     }
+    if (!review.guardrails_reviewed) {
+      return {
+        data: null,
+        error: "Guardrails müssen zuerst als geprüft markiert und gespeichert werden, bevor der Review abgeschlossen werden kann.",
+      };
+    }
 
     let shadowlist: ShadowlistDecisionRow[] = [];
     if (commitment) {

@@ -97,7 +97,7 @@ export default async function DailyReviewPage({
           />
           {review ? (
             <div className="mt-6">
-              <FinalizeReviewButton action={boundFinalizeAction} />
+              <FinalizeReviewButton action={boundFinalizeAction} guardrailsReviewed={review.guardrails_reviewed} />
             </div>
           ) : null}
         </>
