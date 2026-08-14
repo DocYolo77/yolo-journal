@@ -1,4 +1,4 @@
-import type { IndicatorSnapshot, MarketDataProvider, OhlcBar, OhlcInterval, QqqExtensionSnapshot } from "./provider";
+import type { IndexExtensionSnapshot, IndicatorSnapshot, MarketDataProvider, OhlcBar, OhlcInterval } from "./provider";
 import { getAggregateBars, getEma, getSma, getSnapshot, type MassiveAggBar } from "./massive-client";
 import { computeAtr14, computeAtrPctExtensionFromMa } from "./indicators";
 import { shiftTradeDate } from "@/lib/trade-date";
@@ -88,10 +88,10 @@ export class MassiveMarketDataProvider implements MarketDataProvider {
     return { tradeDate: params.tradeDate, qqq, spy };
   }
 
-  async getQqqExtension(params: { tradeDate: string }): Promise<QqqExtensionSnapshot> {
+  async getIndexExtension(params: { ticker: "QQQ" | "SPY"; tradeDate: string }): Promise<IndexExtensionSnapshot> {
     const [snapshot, indicators] = await Promise.all([
-      getSnapshot("QQQ"),
-      this.getPriorSessionIndicators({ ticker: "QQQ", tradeDate: params.tradeDate }),
+      getSnapshot(params.ticker),
+      this.getPriorSessionIndicators({ ticker: params.ticker, tradeDate: params.tradeDate }),
     ]);
 
     // Prefer the live last trade; fall back to today's session close, then

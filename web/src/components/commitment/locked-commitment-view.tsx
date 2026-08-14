@@ -43,14 +43,26 @@ export function LockedCommitmentView({
         <h3 className="text-sm font-semibold text-foreground">1 · State + R%</h3>
         <DetailGrid
           items={[
-            ["Persönlicher Status", commitment.personal_state ?? "–"],
             ["System-Risiko-Cap", commitment.system_risk_pct != null ? `${commitment.system_risk_pct}%` : "–"],
             ["Committed-Risiko", commitment.committed_risk_pct != null ? `${commitment.committed_risk_pct}%` : "–"],
             ["Intraday-Risiko (aktuell)", commitment.intraday_risk_pct != null ? `${commitment.intraday_risk_pct}%` : "–"],
           ]}
         />
+        {commitment.personal_state ? (
+          // Legacy field from before "Persönlicher Status" and
+          // "Marktzustand-Notiz" were consolidated into one box — only
+          // ever populated on commitments saved before that change.
+          <p className="text-xs text-muted-foreground">
+            Persönlicher Status (legacy): {commitment.personal_state}
+          </p>
+        ) : null}
         {commitment.market_state_note ? (
-          <p className="text-sm text-muted-foreground">{commitment.market_state_note}</p>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">
+              Allgemeine Marktlage und persönlicher Zustand
+            </p>
+            <p className="text-sm text-muted-foreground">{commitment.market_state_note}</p>
+          </div>
         ) : null}
       </section>
 

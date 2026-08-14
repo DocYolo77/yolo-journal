@@ -35,12 +35,12 @@ export type EpCandidateFormValues = {
 
 export type CommitmentFormValues = {
   // 1 · STATE + R%
-  personalState: string;
   marketStateNote: string;
   systemRiskPct: string;
   committedRiskPct: string;
 
-  // 2 · QQQ-EXTENSION
+  // 2 · INDEX-LAGE (QQQ/SPY) — SPY field pending a DB migration, see
+  // commitment-form.tsx.
   qqqAtrMultiple: string;
   qqqNote: string;
 
@@ -66,7 +66,6 @@ export type CommitmentFormValues = {
 };
 
 export type CommitmentDraftInput = {
-  personal_state: string | null;
   market_state_note: string | null;
   system_risk_pct: number | null;
   committed_risk_pct: number | null;
@@ -180,7 +179,6 @@ function parseOptionalNumber(
 export function parseCommitmentForm(formData: FormData): CommitmentValidationResult {
   const fieldErrors: CommitmentFormState["fieldErrors"] = {};
 
-  const personalState = readString(formData, "personalState");
   const marketStateNote = readString(formData, "marketStateNote");
   const systemRiskPct = parseAllowedRiskPct(
     readString(formData, "systemRiskPct"),
@@ -325,7 +323,6 @@ export function parseCommitmentForm(formData: FormData): CommitmentValidationRes
   return {
     success: true,
     data: {
-      personal_state: personalState || null,
       market_state_note: marketStateNote || null,
       system_risk_pct: systemRiskPct,
       committed_risk_pct: committedRiskPct,
@@ -370,10 +367,10 @@ export function checkCommitmentCompleteForLock(
 ): string[] {
   const missing: string[] = [];
 
-  if (!data.personal_state) missing.push("1 · State + R%: persönlicher Status fehlt.");
+  if (!data.market_state_note) missing.push("1 · State + R%: Marktlage/persönlicher Zustand fehlt.");
   if (data.committed_risk_pct === null) missing.push("1 · State + R%: Committed-Risiko fehlt.");
   if (data.qqq_extension_atr_multiple === null && !data.qqq_extension_note) {
-    missing.push("2 · QQQ-Extension: ATR-Multiple oder Notiz fehlt.");
+    missing.push("2 · Index-Lage: ATR-Multiple oder eine Notiz fehlt.");
   }
   if (data.mtd_manual_pct === null) missing.push("3 · MTD %: Wert fehlt.");
   if (data.loss_state_manual_counter === null) missing.push("4 · Verlustzähler: Wert fehlt.");

@@ -11,28 +11,31 @@ import {
   type CommitmentFormState,
 } from "@/lib/validation/commitment";
 import { MassiveMarketDataProvider } from "@/lib/market-data/massive-provider";
-import type { QqqExtensionSnapshot } from "@/lib/market-data/provider";
+import type { IndexExtensionSnapshot } from "@/lib/market-data/provider";
 
 /**
- * Live QQQ ATR%-extension lookup for the Commitment form's QQQ-Extension
- * section (§2) — see computeAtrPctExtensionFromMa in
+ * Live QQQ/SPY ATR%-extension lookup for the Commitment form's
+ * Index-Lage section (§2) — see computeAtrPctExtensionFromMa in
  * lib/market-data/indicators.ts for the formula. The manual ATR-Multiple
- * field always stays editable/overridable: this only pre-fills it.
+ * fields always stay editable/overridable: this only pre-fills them.
  * Surfaces the real error message (e.g. "MASSIVE_API_KEY is not
  * configured.") rather than swallowing it, since that's exactly the
- * signal for whether the live integration is usable yet.
+ * signal for whether the live integration is usable yet. Always uses
+ * today's live data, regardless of which trade_date the form is
+ * editing — a backfilled past day never fetches (see
+ * allowLiveMassiveFetch in CommitmentForm).
  */
-export async function fetchQqqExtensionAction(): Promise<
-  { data: QqqExtensionSnapshot; error: null } | { data: null; error: string }
-> {
+export async function fetchIndexExtensionAction(
+  ticker: "QQQ" | "SPY"
+): Promise<{ data: IndexExtensionSnapshot; error: null } | { data: null; error: string }> {
   try {
     const tradeDate = getCurrentTradeDateET();
     const provider = new MassiveMarketDataProvider();
-    const data = await provider.getQqqExtension({ tradeDate });
+    const data = await provider.getIndexExtension({ ticker, tradeDate });
     return { data, error: null };
   } catch (e) {
-    console.error("fetchQqqExtensionAction failed", e);
-    const message = e instanceof Error ? e.message : "QQQ-Extension konnte nicht abgerufen werden.";
+    console.error("fetchIndexExtensionAction failed", e);
+    const message = e instanceof Error ? e.message : "Index-Extension konnte nicht abgerufen werden.";
     return { data: null, error: message };
   }
 }

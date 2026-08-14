@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition, type ReactNode } from "react";
-import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
+import { FieldNumber, FieldSelect, FieldTextarea } from "@/components/ui/form-fields";
 import { WatchlistEditor, type WatchlistRow } from "./watchlist-editor";
 import { EpCandidatesEditor, type EpCandidateRow } from "./ep-candidates-editor";
 import {
@@ -10,8 +10,8 @@ import {
   type CommitmentFormState,
 } from "@/lib/validation/commitment";
 import type { CommitmentWithChildren } from "@/lib/data/commitments";
-import { fetchQqqExtensionAction } from "@/app/actions";
-import type { QqqExtensionSnapshot } from "@/lib/market-data/provider";
+import { fetchIndexExtensionAction } from "@/app/actions";
+import type { IndexExtensionSnapshot } from "@/lib/market-data/provider";
 
 const RISK_OPTIONS = ALLOWED_RISK_PCTS.map((v) => ({ value: String(v), label: `${v}%` }));
 
@@ -61,7 +61,7 @@ export function CommitmentForm({
   const [qqqAtrMultipleValue, setQqqAtrMultipleValue] = useState(
     existing?.qqq_extension_atr_multiple != null ? String(existing.qqq_extension_atr_multiple) : ""
   );
-  const [qqqLive, setQqqLive] = useState<{ data: QqqExtensionSnapshot | null; error: string | null }>({
+  const [qqqLive, setQqqLive] = useState<{ data: IndexExtensionSnapshot | null; error: string | null }>({
     data: null,
     error: null,
   });
@@ -69,7 +69,7 @@ export function CommitmentForm({
 
   function handleFetchQqqExtension() {
     startQqqTransition(async () => {
-      const result = await fetchQqqExtensionAction();
+      const result = await fetchIndexExtensionAction("QQQ");
       if (!result.data) {
         setQqqLive({ data: null, error: result.error });
         return;
@@ -98,13 +98,6 @@ export function CommitmentForm({
 
         <Section title="1 · State + R%">
           <div className="grid gap-4 sm:grid-cols-2">
-            <FieldText
-              name="personalState"
-              label="Persönlicher Status"
-              defaultValue={existing?.personal_state ?? ""}
-              error={errors.personalState}
-              required
-            />
             <FieldSelect
               name="systemRiskPct"
               label="System-Risiko-Cap"
@@ -125,57 +118,72 @@ export function CommitmentForm({
           </div>
           <FieldTextarea
             name="marketStateNote"
-            label="Marktzustand-Notiz"
+            label="Allgemeine Marktlage und persönlicher Zustand"
+            placeholder="z. B. Markt ruhig/nervös, eigener Fokus/Energie, Schlaf, Ablenkungen, Grundstimmung vor der Session…"
             defaultValue={existing?.market_state_note ?? ""}
             error={errors.marketStateNote}
+            required
           />
         </Section>
 
-        <Section title="2 · QQQ-Extension">
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <FieldNumber
-                key={qqqAtrMultipleValue}
-                name="qqqAtrMultiple"
-                label="ATR-Multiple"
-                defaultValue={qqqAtrMultipleValue}
-                error={errors.qqqAtrMultiple}
-              />
+        <Section title="2 · Index-Lage (QQQ/SPY)">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <FieldNumber
+                    key={qqqAtrMultipleValue}
+                    name="qqqAtrMultiple"
+                    label="QQQ ATR-Multiple"
+                    placeholder="z. B. 3.5"
+                    defaultValue={qqqAtrMultipleValue}
+                    error={errors.qqqAtrMultiple}
+                  />
+                </div>
+                {allowLiveMassiveFetch ? (
+                  <button
+                    type="button"
+                    onClick={handleFetchQqqExtension}
+                    disabled={qqqPending}
+                    className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
+                  >
+                    {qqqPending ? "Lädt…" : "Live laden"}
+                  </button>
+                ) : null}
+              </div>
+              {qqqLive.error ? (
+                <p className="text-xs text-negative">{qqqLive.error}</p>
+              ) : qqqLive.data ? (
+                <p className="text-xs text-muted-foreground">
+                  Preis {qqqLive.data.price ?? "–"} · SMA50 {qqqLive.data.sma50 ?? "–"} · ATR14{" "}
+                  {qqqLive.data.atr14 ?? "–"}
+                </p>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Risk-Cap (0.5%) aktiviert sich automatisch ab QQQ-ATR-Multiple ≥ 8.
+              </p>
             </div>
-            {allowLiveMassiveFetch ? (
-              <button
-                type="button"
-                onClick={handleFetchQqqExtension}
-                disabled={qqqPending}
-                className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
-              >
-                {qqqPending ? "Lädt…" : "Live von Massive laden"}
-              </button>
-            ) : null}
+
+            <div className="space-y-2 rounded-md border border-dashed border-border p-3">
+              <p className="text-sm font-medium text-muted-foreground">SPY ATR-Multiple</p>
+              <p className="text-xs text-muted-foreground">
+                Folgt in Kürze (wartet auf eine kleine Datenbank-Erweiterung).
+              </p>
+            </div>
           </div>
           {!allowLiveMassiveFetch ? (
             <p className="text-xs text-muted-foreground">
               Live-Abruf ist bei Nacherfassung vergangener Tage deaktiviert — aktuelle Marktdaten passen
-              nicht zu einem historischen Datum. ATR-Multiple bitte manuell eintragen.
-            </p>
-          ) : null}
-          {qqqLive.error ? (
-            <p className="text-xs text-negative">{qqqLive.error}</p>
-          ) : qqqLive.data ? (
-            <p className="text-xs text-muted-foreground">
-              Preis {qqqLive.data.price ?? "–"} · SMA50 {qqqLive.data.sma50 ?? "–"} · ATR14{" "}
-              {qqqLive.data.atr14 ?? "–"}
+              nicht zu einem historischen Datum. Bitte manuell eintragen.
             </p>
           ) : null}
           <FieldTextarea
             name="qqqNote"
             label="Notiz"
+            placeholder="z. B. Trend, Volumen, Reaktion auf News, Distanz zu Schlüssellevels…"
             defaultValue={existing?.qqq_extension_note ?? ""}
             error={errors.qqqNote}
           />
-          <p className="text-xs text-muted-foreground">
-            Risk-Cap (0.5%) aktiviert sich automatisch ab ATR-Multiple ≥ 8.
-          </p>
         </Section>
 
         <Section title="3 · MTD % — nur neue Entries">
@@ -183,6 +191,7 @@ export function CommitmentForm({
             <FieldNumber
               name="mtdManualPct"
               label="MTD % (manuell)"
+              placeholder="z. B. -2.5"
               defaultValue={existing?.mtd_manual_pct != null ? String(existing.mtd_manual_pct) : ""}
               error={errors.mtdManualPct}
               required
@@ -190,6 +199,7 @@ export function CommitmentForm({
             <FieldNumber
               name="mtdAutoFreshEntryRealizedPct"
               label="Auto Fresh-Entry realized %"
+              placeholder="falls vorhanden"
               defaultValue={
                 existing?.mtd_auto_fresh_entry_realized_pct != null
                   ? String(existing.mtd_auto_fresh_entry_realized_pct)
@@ -198,7 +208,13 @@ export function CommitmentForm({
               error={errors.mtdAutoFreshEntryRealizedPct}
             />
           </div>
-          <FieldTextarea name="mtdNote" label="Notiz" defaultValue={existing?.mtd_note ?? ""} error={errors.mtdNote} />
+          <FieldTextarea
+            name="mtdNote"
+            label="Notiz"
+            placeholder="Kontext zur MTD-Zahl, z. B. große Einzelposition, Sondereffekt…"
+            defaultValue={existing?.mtd_note ?? ""}
+            error={errors.mtdNote}
+          />
           <p className="text-xs text-muted-foreground">
             Pause-Schwelle (MTD ≤ -7.5%) wird automatisch erkannt.
           </p>
@@ -209,6 +225,7 @@ export function CommitmentForm({
             <FieldNumber
               name="lossManualCounter"
               label="Verlustzähler (manuell)"
+              placeholder="Anzahl Verluste in Folge"
               defaultValue={existing?.loss_state_manual_counter != null ? String(existing.loss_state_manual_counter) : ""}
               error={errors.lossManualCounter}
               required
@@ -216,11 +233,18 @@ export function CommitmentForm({
             <FieldNumber
               name="lossAutoCounter"
               label="Verlustzähler (auto)"
+              placeholder="falls automatisch ermittelt"
               defaultValue={existing?.loss_state_auto_counter != null ? String(existing.loss_state_auto_counter) : ""}
               error={errors.lossAutoCounter}
             />
           </div>
-          <FieldTextarea name="lossNote" label="Notiz" defaultValue={existing?.loss_state_note ?? ""} error={errors.lossNote} />
+          <FieldTextarea
+            name="lossNote"
+            label="Notiz"
+            placeholder="z. B. Ursache der Verluste, Muster erkannt…"
+            defaultValue={existing?.loss_state_note ?? ""}
+            error={errors.lossNote}
+          />
           <p className="text-xs text-muted-foreground">
             Ab 6 Verlusten: Reduced-Size-Mode. Ab 10 Verlusten: Pflicht-Review-Warnung — beides automatisch
             abgeleitet.
@@ -244,6 +268,7 @@ export function CommitmentForm({
           <FieldTextarea
             name="operationalPlan"
             label="Operativer Plan"
+            placeholder="Was ist heute konkret der Plan? Welche Setups, welche Trigger, welche Reihenfolge…"
             defaultValue={existing?.operational_plan ?? ""}
             error={errors.operationalPlan}
             required
@@ -251,6 +276,7 @@ export function CommitmentForm({
           <FieldTextarea
             name="improvementFocus"
             label="Improvement Focus"
+            placeholder="Woran arbeitest du heute gezielt? z. B. Geduld auf Trigger warten, Stops nicht verschieben…"
             defaultValue={existing?.improvement_focus ?? ""}
             error={errors.improvementFocus}
           />

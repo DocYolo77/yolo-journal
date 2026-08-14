@@ -34,20 +34,36 @@ type BaseFieldProps = {
   error?: string;
   required?: boolean;
   defaultValue?: string;
+  /** Ghost hint text shown inside the empty field. */
+  placeholder?: string;
 };
 
-export function FieldText({ name, label, defaultValue, error, required }: BaseFieldProps) {
+export function FieldText({ name, label, defaultValue, error, required, placeholder }: BaseFieldProps) {
   return (
     <FieldWrapper label={label} htmlFor={name} error={error} required={required}>
-      <input id={name} name={name} type="text" defaultValue={defaultValue} className={inputClass} />
+      <input
+        id={name}
+        name={name}
+        type="text"
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className={inputClass}
+      />
     </FieldWrapper>
   );
 }
 
-export function FieldTextarea({ name, label, defaultValue, error, required }: BaseFieldProps) {
+export function FieldTextarea({ name, label, defaultValue, error, required, placeholder }: BaseFieldProps) {
   return (
     <FieldWrapper label={label} htmlFor={name} error={error} required={required}>
-      <textarea id={name} name={name} rows={4} defaultValue={defaultValue} className={inputClass} />
+      <textarea
+        id={name}
+        name={name}
+        rows={4}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className={inputClass}
+      />
     </FieldWrapper>
   );
 }
@@ -59,6 +75,7 @@ export function FieldNumber({
   error,
   required,
   min,
+  placeholder,
 }: BaseFieldProps & { min?: number }) {
   return (
     <FieldWrapper label={label} htmlFor={name} error={error} required={required}>
@@ -69,6 +86,7 @@ export function FieldNumber({
         step="any"
         min={min}
         defaultValue={defaultValue}
+        placeholder={placeholder}
         className={inputClass}
       />
     </FieldWrapper>

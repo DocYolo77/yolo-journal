@@ -31,7 +31,7 @@ export type IndicatorSnapshot = {
   atr14: number | null;
 };
 
-export type QqqExtensionSnapshot = {
+export type IndexExtensionSnapshot = {
   price: number | null;
   sma50: number | null;
   atr14: number | null;
@@ -59,11 +59,13 @@ export interface MarketDataProvider {
   getIndexSnapshot(params: { tradeDate: string }): Promise<Record<string, unknown>>;
 
   /**
-   * Live QQQ ATR%-extension from its 50-day MA — the Commitment's
-   * QQQ-Extension section (§2, triggers the 0.5% risk cap at >= 8) and
-   * the Committed Focus Audit's sma50_atr_extension_at_entry (§7,
-   * legacy reference). Combines a current/live QQQ price with D-1
-   * SMA50/ATR14 (daily indicators only update once per session).
+   * Live ATR%-extension from an index's 50-day MA — the Commitment's
+   * Index-Lage (QQQ/SPY) section (§2; the 0.5% risk cap at ATR-Multiple
+   * >= 8 is QQQ-specific per the legacy reference, SPY is a parallel
+   * reading only) and the Committed Focus Audit's
+   * sma50_atr_extension_at_entry (§7). Combines a current/live index
+   * price with D-1 SMA50/ATR14 (daily indicators only update once per
+   * session).
    */
-  getQqqExtension(params: { tradeDate: string }): Promise<QqqExtensionSnapshot>;
+  getIndexExtension(params: { ticker: "QQQ" | "SPY"; tradeDate: string }): Promise<IndexExtensionSnapshot>;
 }
