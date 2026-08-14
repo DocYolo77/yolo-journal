@@ -39,9 +39,9 @@ export type CommitmentFormValues = {
   systemRiskPct: string;
   committedRiskPct: string;
 
-  // 2 · INDEX-LAGE (QQQ/SPY) — SPY field pending a DB migration, see
-  // commitment-form.tsx.
+  // 2 · INDEX-LAGE (QQQ/SPY)
   qqqAtrMultiple: string;
+  spyAtrMultiple: string;
   qqqNote: string;
 
   // 3 · MTD %
@@ -74,6 +74,7 @@ export type CommitmentDraftInput = {
   qqq_extension_atr_multiple: number | null;
   qqq_extension_cap_active: boolean;
   qqq_extension_note: string | null;
+  spy_extension_atr_multiple: number | null;
 
   mtd_manual_pct: number | null;
   mtd_auto_fresh_entry_realized_pct: number | null;
@@ -209,6 +210,12 @@ export function parseCommitmentForm(formData: FormData): CommitmentValidationRes
     "qqqAtrMultiple",
     fieldErrors
   );
+  const spyAtrMultiple = parseOptionalNumber(
+    readString(formData, "spyAtrMultiple"),
+    "SPY-ATR-Multiple",
+    "spyAtrMultiple",
+    fieldErrors
+  );
   const qqqNote = readString(formData, "qqqNote");
   // Auto-derived, not a separate manual checkbox — see module comment on
   // QQQ_EXTENSION_CAP_ATR_MULTIPLE for why.
@@ -334,6 +341,7 @@ export function parseCommitmentForm(formData: FormData): CommitmentValidationRes
       qqq_extension_atr_multiple: qqqAtrMultiple,
       qqq_extension_cap_active: qqqExtensionCapActive,
       qqq_extension_note: qqqNote || null,
+      spy_extension_atr_multiple: spyAtrMultiple,
 
       mtd_manual_pct: mtdManualPct,
       mtd_auto_fresh_entry_realized_pct: mtdAutoFreshEntryRealizedPct,
@@ -369,8 +377,12 @@ export function checkCommitmentCompleteForLock(
 
   if (!data.market_state_note) missing.push("1 · State + R%: Marktlage/persönlicher Zustand fehlt.");
   if (data.committed_risk_pct === null) missing.push("1 · State + R%: Committed-Risiko fehlt.");
-  if (data.qqq_extension_atr_multiple === null && !data.qqq_extension_note) {
-    missing.push("2 · Index-Lage: ATR-Multiple oder eine Notiz fehlt.");
+  if (
+    data.qqq_extension_atr_multiple === null &&
+    data.spy_extension_atr_multiple === null &&
+    !data.qqq_extension_note
+  ) {
+    missing.push("2 · Index-Lage: mindestens ein ATR-Multiple oder eine Notiz fehlt.");
   }
   if (data.mtd_manual_pct === null) missing.push("3 · MTD %: Wert fehlt.");
   if (data.loss_state_manual_counter === null) missing.push("4 · Verlustzähler: Wert fehlt.");

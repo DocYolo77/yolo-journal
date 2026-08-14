@@ -81,6 +81,29 @@ export function CommitmentForm({
     });
   }
 
+  const [spyAtrMultipleValue, setSpyAtrMultipleValue] = useState(
+    existing?.spy_extension_atr_multiple != null ? String(existing.spy_extension_atr_multiple) : ""
+  );
+  const [spyLive, setSpyLive] = useState<{ data: IndexExtensionSnapshot | null; error: string | null }>({
+    data: null,
+    error: null,
+  });
+  const [spyPending, startSpyTransition] = useTransition();
+
+  function handleFetchSpyExtension() {
+    startSpyTransition(async () => {
+      const result = await fetchIndexExtensionAction("SPY");
+      if (!result.data) {
+        setSpyLive({ data: null, error: result.error });
+        return;
+      }
+      setSpyLive({ data: result.data, error: null });
+      if (result.data.atrExtensionMultiple !== null) {
+        setSpyAtrMultipleValue(result.data.atrExtensionMultiple.toFixed(2));
+      }
+    });
+  }
+
   const errors = state.fieldErrors;
   const watchlistTickers = watchlist.map((w) => w.ticker.toUpperCase()).filter(Boolean);
 
@@ -164,11 +187,38 @@ export function CommitmentForm({
               </p>
             </div>
 
-            <div className="space-y-2 rounded-md border border-dashed border-border p-3">
-              <p className="text-sm font-medium text-muted-foreground">SPY ATR-Multiple</p>
-              <p className="text-xs text-muted-foreground">
-                Folgt in Kürze (wartet auf eine kleine Datenbank-Erweiterung).
-              </p>
+            <div className="space-y-2">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <FieldNumber
+                    key={spyAtrMultipleValue}
+                    name="spyAtrMultiple"
+                    label="SPY ATR-Multiple"
+                    placeholder="z. B. 2.1"
+                    defaultValue={spyAtrMultipleValue}
+                    error={errors.spyAtrMultiple}
+                  />
+                </div>
+                {allowLiveMassiveFetch ? (
+                  <button
+                    type="button"
+                    onClick={handleFetchSpyExtension}
+                    disabled={spyPending}
+                    className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
+                  >
+                    {spyPending ? "Lädt…" : "Live laden"}
+                  </button>
+                ) : null}
+              </div>
+              {spyLive.error ? (
+                <p className="text-xs text-negative">{spyLive.error}</p>
+              ) : spyLive.data ? (
+                <p className="text-xs text-muted-foreground">
+                  Preis {spyLive.data.price ?? "–"} · SMA50 {spyLive.data.sma50 ?? "–"} · ATR14{" "}
+                  {spyLive.data.atr14 ?? "–"}
+                </p>
+              ) : null}
+              <p className="text-xs text-muted-foreground">Nur informative Zweitlesung, kein eigener Risk-Cap.</p>
             </div>
           </div>
           {!allowLiveMassiveFetch ? (

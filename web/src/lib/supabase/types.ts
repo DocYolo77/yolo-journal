@@ -33,9 +33,8 @@ export type CommitmentRow = {
   qqq_extension_atr_multiple: number | null;
   qqq_extension_cap_active: boolean;
   qqq_extension_note: string | null;
-  // spy_extension_atr_multiple intentionally not typed here yet — the
-  // 20260814000000_add_spy_extension_to_commitments.sql migration hasn't
-  // been applied to the live project yet. Add it back once it has.
+  // 20260814000000_add_spy_extension_to_commitments.sql
+  spy_extension_atr_multiple: number | null;
 
   mtd_manual_pct: number | null;
   mtd_auto_fresh_entry_realized_pct: number | null;
