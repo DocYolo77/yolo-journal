@@ -375,3 +375,58 @@ export function renderIntradayChartSvg(
     INTRADAY_HEIGHT
   );
 }
+
+/**
+ * Weekly Review NLV chart (§5) — a simple line of
+ * broker_account_snapshots.net_liquidation_value across the trading
+ * days available that week. Deliberately not a candlestick (there's no
+ * OHLC for an account balance) — a plain line is the honest shape here.
+ */
+export function renderNlvChartSvg(points: { trading_date: string; net_liquidation_value: number | null }[]): string {
+  const valid = points.filter((p): p is { trading_date: string; net_liquidation_value: number } => p.net_liquidation_value !== null);
+  if (valid.length === 0) {
+    return emptyChartSvg("NLV: keine Broker-Account-Snapshots diese Woche verfügbar");
+  }
+
+  const values = valid.map((p) => p.net_liquidation_value);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const pad = (maxV - minV) * 0.1 || Math.max(1, minV * 0.02);
+  const domainMin = minV - pad;
+  const domainMax = maxV + pad;
+
+  const innerWidth = WIDTH - DAILY_PADDING.left - DAILY_PADDING.right;
+  const innerHeight = DAILY_HEIGHT - DAILY_PADDING.top - DAILY_PADDING.bottom;
+
+  const xScale = (i: number) =>
+    DAILY_PADDING.left + (valid.length === 1 ? innerWidth / 2 : (i / (valid.length - 1)) * innerWidth);
+  const yScale = (v: number) =>
+    DAILY_PADDING.top + innerHeight - ((v - domainMin) / (domainMax - domainMin || 1)) * innerHeight;
+
+  const yTicks = pickYTicks(domainMin, domainMax, 5);
+  const gridAndYLabels = yTicks
+    .map(
+      (v) =>
+        `<line x1="${DAILY_PADDING.left}" x2="${WIDTH - DAILY_PADDING.right}" y1="${yScale(v).toFixed(1)}" y2="${yScale(v).toFixed(1)}" stroke="${COLORS.border}" stroke-width="1" />` +
+        `<text x="${DAILY_PADDING.left - 8}" y="${yScale(v).toFixed(1)}" fill="${COLORS.mutedForeground}" font-size="10" text-anchor="end" dominant-baseline="middle">${v.toFixed(0)}</text>`
+    )
+    .join("");
+
+  const xLabels = pickIndices(valid.length, 5)
+    .map(
+      (i) =>
+        `<text x="${xScale(i).toFixed(1)}" y="${DAILY_HEIGHT - 6}" fill="${COLORS.mutedForeground}" font-size="10" text-anchor="middle">${valid[i].trading_date.slice(5)}</text>`
+    )
+    .join("");
+
+  const points_ = valid.map((p, i) => `${xScale(i).toFixed(1)},${yScale(p.net_liquidation_value).toFixed(1)}`).join(" ");
+  const dots = valid
+    .map((p, i) => `<circle cx="${xScale(i).toFixed(1)}" cy="${yScale(p.net_liquidation_value).toFixed(1)}" r="2.5" fill="${COLORS.vwap}" />`)
+    .join("");
+
+  return wrapSvg(
+    `${gridAndYLabels}${polyline(points_, COLORS.vwap, 1.75)}${dots}${xLabels}` +
+      `<text x="${WIDTH - DAILY_PADDING.right}" y="${DAILY_HEIGHT - 6}" fill="${COLORS.mutedForeground}" font-size="10" text-anchor="end">NLV</text>`,
+    DAILY_HEIGHT
+  );
+}

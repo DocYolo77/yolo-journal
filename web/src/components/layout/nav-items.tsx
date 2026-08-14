@@ -17,10 +17,11 @@ const iconProps = {
   strokeLinejoin: "round" as const,
 };
 
-// Beta scope: only these four P0 workflows are wired up end-to-end.
-// Weekly/Monthly Review, Rules & Timeline, and Google Drive Export are
-// explicitly P1 (post-Beta) — their routes still exist as placeholders
-// but are intentionally not linked from nav until they're real, per the
+// Beta scope: these five workflows are wired up end-to-end (Weekly
+// Review joined the P0 set once its aggregation/report/PDF/JSON layer
+// shipped). Monthly Review, Rules & Timeline, and Google Drive Export
+// remain P1 (post-Beta) — their routes still exist as placeholders but
+// are intentionally not linked from nav until they're real, per the
 // "funktional > schön" beta instruction (hidden rather than shown as
 // dead "coming later" links). Pre-Market Commitment is the first-class
 // home workflow, hence href "/". See
@@ -60,6 +61,18 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/weekly-review",
+    label: "Weekly Review",
+    icon: (
+      <svg {...iconProps} aria-hidden="true">
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M8 3v3M16 3v3" />
+        <path d="M7 14h3M14 14h3M7 17h3" />
+      </svg>
+    ),
+  },
+  {
     href: "/archive",
     label: "Archiv",
     icon: (
@@ -75,9 +88,4 @@ export const NAV_ITEMS: NavItem[] = [
 // P1 — not linked in the Beta nav, routes still exist as placeholders.
 // href kept here (not in NAV_ITEMS) so a future phase can re-add them
 // without redesigning this file.
-export const COMING_LATER_ROUTES = [
-  "/weekly-review",
-  "/monthly-review",
-  "/rules-timeline",
-  "/drive-export",
-];
+export const COMING_LATER_ROUTES = ["/monthly-review", "/rules-timeline", "/drive-export"];

@@ -221,6 +221,36 @@ export type DailyReviewRow = {
   updated_at: string;
 };
 
+// 20260813180619_create_market_data_and_broker_schema.sql (campaigns —
+// no typed row existed before; broker_executions/broker_account_
+// snapshots/broker_positions_snapshots are still queried untyped
+// elsewhere in this app, same established pattern, only campaigns gets
+// a type here since Weekly Review depends on its shape directly.)
+
+export type CampaignDirection = "long" | "short";
+export type CampaignStatus = "open" | "closed";
+export type CampaignSource = "reconstructed" | "prior_position_unresolved" | "manual";
+
+export type CampaignRow = {
+  id: string;
+  user_id: string | null;
+  trade_date: string;
+  symbol: string;
+  direction: CampaignDirection | null;
+  started_at: string | null;
+  ended_at: string | null;
+  status: CampaignStatus;
+  initial_entry: number | null;
+  entry_strategy: string | null;
+  intended_trigger: string | null;
+  initial_stop: number | null;
+  current_stop: number | null;
+  notes: string | null;
+  source: CampaignSource;
+  created_at: string;
+  updated_at: string;
+};
+
 // 20260814020000_create_daily_report_snapshots.sql
 
 export type ChartSeriesPoint = {
@@ -312,5 +342,246 @@ export type DailyReportSnapshotRow = {
   snapshot: DailyReportSnapshotData;
   pdf_storage_path: string | null;
   pdf_generated_at: string | null;
+  created_at: string;
+};
+
+// 20260814040000_create_weekly_reviews.sql
+
+export type WeeklyReviewStatus = "DRAFT" | "FINAL";
+export type ProcessGrade = "A" | "B" | "C" | "D" | "F";
+
+export type WeeklyReviewRow = {
+  id: string;
+  user_id: string | null;
+  week_start: string;
+  week_end: string;
+  status: WeeklyReviewStatus;
+  preconditions_note: string | null;
+  worked: string | null;
+  not_worked: string | null;
+  largest_missed_move_comment: string | null;
+  continue_doing: string | null;
+  improve: string | null;
+  eliminate: string | null;
+  next_week_changes: string | null;
+  process_grade: ProcessGrade | null;
+  process_grade_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  finalized_at: string | null;
+};
+
+// Weekly Review aggregation — computed live (lib/weekly-review/aggregate.ts)
+// from daily_reviews/commitments/shadowlist_decisions/campaigns/broker_*
+// for a Monday-Friday trading week, then frozen verbatim into
+// weekly_report_snapshots.snapshot at finalization. `null` throughout
+// means "nicht verfügbar" (data foundation missing), never a guessed
+// value — e.g. every R-multiple field is null in V1 since campaigns
+// carry no stop price yet and the shadow-model tables are unpopulated.
+
+export type WeeklySummary = {
+  week_start: string;
+  week_end: string;
+  start_nlv: number | null;
+  end_nlv: number | null;
+  nlv_change_dollar: number | null;
+  nlv_change_pct: number | null;
+  realized_pnl_dollar: number | null;
+  unrealized_pnl_change_dollar: number | null;
+  daily_review_count: number;
+  entry_day_count: number;
+  management_or_zero_day_count: number;
+  new_campaign_count: number;
+  closed_campaign_count: number;
+  actually_traded_ticker_count: number;
+  execution_count: number;
+  avg_committed_risk_pct: number | null;
+  risk_mode_by_day: { trade_date: string; committed_risk_pct: number | null; reduced_size_mode: boolean }[];
+  losing_streak_start: string | null;
+  losing_streak_end: string | null;
+};
+
+export type WeeklyPreconditions = {
+  index_context: { ticker: "QQQ" | "SPY"; daily: ChartSeriesPoint[] }[];
+  daily_market_environment: { trade_date: string; market_environment: string | null }[];
+  committed_risk_by_day: { trade_date: string; committed_risk_pct: number | null }[];
+  mtd_status_by_day: { trade_date: string; mtd_pause_threshold_reached: boolean; mtd_manual_pct: number | null }[];
+  reduced_size_days: string[];
+  losing_streak_review_trigger_days: string[];
+};
+
+export type WeeklyBalance = {
+  nlv_series: { trading_date: string; net_liquidation_value: number | null }[];
+  winner_count: number | null;
+  loser_count: number | null;
+  win_rate_pct: number | null;
+  avg_winner_dollar: number | null;
+  avg_loser_dollar: number | null;
+  total_realized_dollar: number | null;
+  profit_factor: number | null;
+  payoff_ratio: number | null;
+  expectancy_dollar: number | null;
+  max_winner_dollar: number | null;
+  max_loser_dollar: number | null;
+  r_multiples_available: boolean;
+};
+
+export type WeeklyGuardrailStat = {
+  guardrail_id: string;
+  guardrail: string;
+  checked_count: number;
+  eingehalten_count: number;
+  verletzt_count: number;
+  nicht_anwendbar_count: number;
+  compliance_rate_pct: number | null;
+};
+
+export type WeeklyEnforcement = {
+  guardrails: WeeklyGuardrailStat[];
+  reviews_with_guardrails_confirmed: number;
+  reviews_total: number;
+};
+
+export type WeeklyEvidenceCampaign = {
+  campaign_id: string;
+  symbol: string;
+  trade_date: string;
+  direction: "long" | "short";
+  realized_pnl_dollar: number | null;
+};
+
+export type WeeklyEvidence = {
+  best_campaigns: WeeklyEvidenceCampaign[];
+  worst_campaigns: WeeklyEvidenceCampaign[];
+  management_grades: { value: string; count: number }[];
+  rule_statuses: { value: string; count: number }[];
+  setups: { value: string; count: number }[];
+  structures: { value: string; count: number }[];
+  entry_tactics: { value: string; count: number }[];
+};
+
+export type WeeklyShadowLog = {
+  committed_slots: number;
+  prime_slots: number;
+  genommen: number;
+  nicht_genommen: number;
+  take_rate_pct: number | null;
+  prime_take_rate_pct: number | null;
+  actually_traded_tickers: string[];
+  shadow_model_available: boolean;
+};
+
+export type WeeklyMissedMove = {
+  ticker: string;
+  list_type: WatchlistType;
+  decision: string;
+  reason: string | null;
+  trade_date: string;
+} | null;
+
+export type WeeklyBreakdownGroup = {
+  value: string;
+  count: number;
+  win_rate_pct: number | null;
+  avg_r: null;
+  avg_dollar: number | null;
+  total_dollar: number | null;
+};
+
+export type WeeklySetupBreakdown = {
+  by_setup: WeeklyBreakdownGroup[];
+  by_structure: WeeklyBreakdownGroup[];
+  by_entry_tactic: WeeklyBreakdownGroup[];
+};
+
+export type WeeklyCooldownGroup = {
+  label: "after_winner" | "after_loser";
+  entry_count: number;
+  win_rate_pct: number | null;
+  avg_dollar: number | null;
+  guardrail_violation_count: number;
+};
+
+export type WeeklyCooldown = {
+  groups: WeeklyCooldownGroup[];
+  available: boolean;
+  note: string | null;
+};
+
+export type WeeklyDiagnosticCheck = {
+  category: "selection" | "execution" | "management" | "risk";
+  check_id: string;
+  label: string;
+  /** null = nicht verfügbar (data foundation missing), never guessed. */
+  triggered: boolean | null;
+  detail: string;
+};
+
+export type WeeklyProblemLoop = {
+  label: string;
+  weeks_seen: number;
+  weeks_checked: number;
+};
+
+export type WeeklyRepetition = {
+  problem_loops: WeeklyProblemLoop[];
+  recurring_positives: WeeklyProblemLoop[];
+};
+
+export type WeeklyStateStat = {
+  state: string;
+  day_count: number;
+  campaign_count: number;
+  avg_dollar: number | null;
+  win_rate_pct: number | null;
+  guardrail_violation_count: number;
+  avg_focus: number | null;
+};
+
+export type WeeklyAggregation = {
+  summary: WeeklySummary;
+  preconditions: WeeklyPreconditions;
+  balance: WeeklyBalance;
+  enforcement: WeeklyEnforcement;
+  evidence: WeeklyEvidence;
+  shadow_log: WeeklyShadowLog;
+  largest_missed_move: WeeklyMissedMove;
+  setup_breakdown: WeeklySetupBreakdown;
+  cooldown: WeeklyCooldown;
+  diagnostics: WeeklyDiagnosticCheck[];
+  repetition: WeeklyRepetition;
+  state_analysis: WeeklyStateStat[];
+};
+
+export type WeeklyReportSnapshotData = {
+  report_schema_version: 1;
+  week_start: string;
+  week_end: string;
+  created_at: string;
+  source_daily_report_ids: string[];
+  aggregation: WeeklyAggregation;
+  manual: {
+    preconditions_note: string | null;
+    worked: string | null;
+    not_worked: string | null;
+    largest_missed_move_comment: string | null;
+    continue_doing: string | null;
+    improve: string | null;
+    eliminate: string | null;
+    next_week_changes: string | null;
+    process_grade: ProcessGrade | null;
+    process_grade_reason: string | null;
+  };
+};
+
+export type WeeklyReportSnapshotRow = {
+  id: string;
+  user_id: string | null;
+  weekly_review_id: string;
+  week_start: string;
+  week_end: string;
+  report_schema_version: number;
+  source_daily_report_ids: string[];
+  snapshot: WeeklyReportSnapshotData;
   created_at: string;
 };
