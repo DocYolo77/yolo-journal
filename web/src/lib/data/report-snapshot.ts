@@ -17,9 +17,53 @@ import type {
 
 type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
 
+const MARKER_LABELS: Record<ChartMarker["event_type"], string> = {
+  ENTRY: "Entry",
+  ADD: "Add",
+  PARTIAL_EXIT: "Partial",
+  EXIT: "Exit",
+};
+
 /**
- * Entry/Add/Exit markers from real broker data — campaigns ->
- * campaign_executions -> broker_executions for this trade_date/ticker.
+ * Classifies a chronological execution list into Entry/Add/Partial-
+ * Exit/Exit events by tracking running position size. This is a
+ * heuristic stand-in — real IBKR fills carry no such classification of
+ * their own — that keeps the marker architecture (ChartMarker.event_type)
+ * ready for a future IBKR Flex Web Service sync to populate more
+ * precisely (e.g. via order/campaign linkage) without changing the chart
+ * rendering side at all.
+ */
+function classifyExecutions(
+  executions: { side: "BUY" | "SELL"; price: number; executed_at: string; quantity: number }[]
+): ChartMarker[] {
+  let position = 0;
+  return executions.map((e) => {
+    const signedQty = e.side === "BUY" ? e.quantity : -e.quantity;
+    const wasFlat = position === 0;
+    const nextPosition = position + signedQty;
+
+    let eventType: ChartMarker["event_type"];
+    if (e.side === "BUY") {
+      eventType = wasFlat ? "ENTRY" : "ADD";
+    } else {
+      eventType = nextPosition <= 0 ? "EXIT" : "PARTIAL_EXIT";
+    }
+
+    position = nextPosition;
+
+    return {
+      timestamp: e.executed_at,
+      side: e.side,
+      price: e.price,
+      label: MARKER_LABELS[eventType],
+      event_type: eventType,
+    };
+  });
+}
+
+/**
+ * Entry/Add/Partial-Exit/Exit markers from real broker data — campaigns
+ * -> campaign_executions -> broker_executions for this trade_date/ticker.
  * Empty (not fabricated) whenever no broker data has been synced yet,
  * which is the honest state of this app today (no successful IBKR sync
  * has run).
@@ -48,18 +92,20 @@ async function getMarkersForTicker(
 
   const { data: executions } = await supabase
     .from("broker_executions")
-    .select("side, price, executed_at")
+    .select("side, price, executed_at, quantity")
     .in("id", executionIds)
     .order("executed_at", { ascending: true });
 
-  return (executions ?? [])
+  const validExecutions = (executions ?? [])
     .filter((e) => e.price !== null)
     .map((e) => ({
-      timestamp: e.executed_at as string,
       side: e.side as "BUY" | "SELL",
       price: e.price as number,
-      label: e.side === "BUY" ? "Entry/Add" : "Exit",
+      executed_at: e.executed_at as string,
+      quantity: Number(e.quantity),
     }));
+
+  return classifyExecutions(validExecutions);
 }
 
 async function assembleMarketData(

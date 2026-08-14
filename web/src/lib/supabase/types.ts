@@ -246,11 +246,18 @@ export type IntradayBarPoint = {
   volume: number;
 };
 
+// Architecture for future real IBKR entry/add/partial-exit/exit
+// classification — currently derived heuristically from running position
+// size (see getMarkersForTicker in lib/data/report-snapshot.ts) since no
+// IBKR Flex Web Service sync exists yet to supply this directly.
+export type ChartMarkerEventType = "ENTRY" | "ADD" | "PARTIAL_EXIT" | "EXIT";
+
 export type ChartMarker = {
   timestamp: string;
   side: "BUY" | "SELL";
   price: number;
   label: string;
+  event_type: ChartMarkerEventType;
 };
 
 export type OrbLevel = {
