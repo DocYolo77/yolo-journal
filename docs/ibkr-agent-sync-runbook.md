@@ -1,4 +1,20 @@
-# IBKR Agent Sync — Runbook
+# IBKR Agent Sync — Runbook (SUPERSEDED)
+
+**Superseded.** Once `IBKR_FLEX_TOKEN` / `IBKR_FLEX_TRADES_QUERY_ID` /
+`IBKR_FLEX_ACTIVITY_QUERY_ID` were configured, "Sync IBKR now" was
+rewired to call the IBKR Flex Web Service directly from the deployed
+Next.js server — no Claude/MCP/agent dependency anymore. See
+`web/src/lib/broker/ibkr-flex-client.ts` (SendRequest/GetStatement),
+`web/src/lib/broker/ibkr-flex-normalize.ts` (Trade/Account/Position
+parsing, built against a real captured Flex response — not guessed) and
+`web/src/lib/broker/ibkr-sync.ts` (full orchestration: executions ->
+campaign reconciliation -> account/positions -> shadowlist
+auto-override -> `broker_sync_runs`). The two scheduled
+`ibkr-daily-sync-*` Routines and `manual_sync_requests` described below
+are retired; the button now runs synchronously and shows its own result.
+This document is kept for historical context only.
+
+---
 
 ## Why this exists as a runbook, not a server integration
 

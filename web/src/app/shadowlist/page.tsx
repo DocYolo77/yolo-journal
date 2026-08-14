@@ -4,11 +4,15 @@ import { DecisionEditor } from "@/components/shadowlist/decision-editor";
 import { IbkrSyncButton } from "@/components/broker/ibkr-sync-button";
 import { getLatestCommitmentForDate } from "@/lib/data/commitments";
 import { computeShadowlistSummary, getOrCreateShadowlistDecisions } from "@/lib/data/shadowlist";
-import { getLatestSyncStatus } from "@/lib/data/broker-sync";
+import { getLatestSyncRun } from "@/lib/data/broker-sync";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
-import { requestIbkrSyncAction, saveShadowlistDecisionsAction } from "./actions";
+import { runIbkrSyncAction, saveShadowlistDecisionsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+// The IBKR Flex sync polls GetStatement for up to ~24s per query
+// (Trades + Activity run in parallel) — give the "Sync IBKR now" server
+// action enough time on Vercel.
+export const maxDuration = 60;
 
 export default async function ShadowlistPage({
   searchParams,
@@ -36,14 +40,8 @@ export default async function ShadowlistPage({
     </div>
   );
 
-  const syncStatusResult = await getLatestSyncStatus();
-  const syncButton = syncStatusResult.data ? (
-    <IbkrSyncButton
-      action={requestIbkrSyncAction}
-      lastRun={syncStatusResult.data.lastRun}
-      pendingRequest={syncStatusResult.data.pendingManualRequest}
-    />
-  ) : null;
+  const syncRunResult = await getLatestSyncRun();
+  const syncButton = <IbkrSyncButton action={runIbkrSyncAction} lastRun={syncRunResult.data ?? null} />;
 
   const commitmentResult = await getLatestCommitmentForDate(tradeDate);
 

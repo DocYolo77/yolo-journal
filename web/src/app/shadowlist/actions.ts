@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { appendAuditEvent } from "@/lib/audit";
 import { parseShadowlistForm, type ShadowlistFormState } from "@/lib/validation/shadowlist";
+import { runIbkrSync, type IbkrSyncSummary } from "@/lib/broker/ibkr-sync";
 
 export async function saveShadowlistDecisionsAction(
   commitmentId: string,
@@ -54,51 +55,34 @@ export async function saveShadowlistDecisionsAction(
   return { fieldErrors: {}, success: true };
 }
 
-export type SyncRequestState = { error: string | null };
+export type IbkrSyncActionState = { result: IbkrSyncSummary | null; error: string | null };
 
 /**
- * "Sync IBKR now" — the deployed app cannot call the
- * Interactive_Brokers_IBKR MCP connector itself (see
- * docs/ibkr-agent-sync-runbook.md), so this only records the request.
- * The next scheduled sync Routine firing checks manual_sync_requests
- * before its normal DST time-window guard and, if a pending row exists,
- * runs immediately regardless of time of day.
+ * "Sync IBKR now" — runs the full direct IBKR Flex Web Service sync
+ * (lib/broker/ibkr-sync.ts) synchronously on the deployed server and
+ * returns a rich result the button renders immediately. No Claude/MCP/
+ * agent dependency (superseded docs/ibkr-agent-sync-runbook.md's
+ * scheduled-agent-turn approach, which needed the Interactive_Brokers_
+ * IBKR MCP connector and could take up to ~12h to pick up a manual
+ * request).
  */
-export async function requestIbkrSyncAction(
-  prevState: SyncRequestState,
+export async function runIbkrSyncAction(
+  prevState: IbkrSyncActionState,
   formData: FormData
-): Promise<SyncRequestState> {
+): Promise<IbkrSyncActionState> {
   // Both params are unused but required so this action matches the
   // (state, formData) => State signature useActionState expects.
   void prevState;
   void formData;
 
-  const supabase = getSupabaseAdmin();
-
   try {
-    const { data: inserted, error: insertError } = await supabase
-      .from("manual_sync_requests")
-      .insert({ status: "pending" })
-      .select("id")
-      .single();
-
-    if (insertError || !inserted) {
-      console.error("requestIbkrSyncAction: insert failed", insertError);
-      return { error: "Sync-Anfrage konnte nicht gespeichert werden." };
-    }
-
-    await appendAuditEvent({
-      eventType: "ibkr_manual_sync_requested",
-      tradeDate: null,
-      entityType: "manual_sync_request",
-      entityId: inserted.id,
-      payload: null,
-    });
+    const result = await runIbkrSync();
+    revalidatePath("/shadowlist");
+    revalidatePath("/archive");
+    return { result, error: null };
   } catch (e) {
-    console.error("requestIbkrSyncAction failed", e);
-    return { error: "Sync-Anfrage konnte nicht gespeichert werden." };
+    console.error("runIbkrSyncAction failed", e);
+    const message = e instanceof Error ? e.message : "IBKR-Sync fehlgeschlagen.";
+    return { result: null, error: message };
   }
-
-  revalidatePath("/shadowlist");
-  return { error: null };
 }

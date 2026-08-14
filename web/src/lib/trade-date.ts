@@ -14,6 +14,11 @@ export function getCurrentTradeDateET(): string {
   return TRADE_DATE_FORMATTER.format(new Date());
 }
 
+/** Same as getCurrentTradeDateET but for an arbitrary ISO instant (e.g. a broker fill's executed_at). */
+export function getTradeDateForInstant(isoInstant: string): string {
+  return TRADE_DATE_FORMATTER.format(new Date(isoInstant));
+}
+
 const TRADE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isValidTradeDate(value: string): boolean {
