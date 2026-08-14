@@ -29,21 +29,31 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // getUser() validates the JWT against Supabase, unlike getSession()
-  // which only reads the cookie — required in middleware per Supabase's
-  // own SSR guidance, since a stale/forged cookie must not pass here.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const isLoginRoute = request.nextUrl.pathname.startsWith("/login");
 
-  if (!user && !isLoginRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+  // getUser() validates the JWT against Supabase, unlike getSession()
+  // which only reads the cookie — required here per Supabase's own SSR
+  // guidance, since a stale/forged cookie must not pass. Wrapped: a
+  // transient failure calling out to Supabase Auth (network blip, cold
+  // start) must never crash the whole response — fail closed (send to
+  // /login) instead of letting an unhandled rejection break the page.
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (user && isLoginRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+    if (!user && !isLoginRoute) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+
+    if (user && isLoginRoute) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  } catch (e) {
+    console.error("proxy: auth check failed", e);
+    if (!isLoginRoute) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
   }
 
   return response;
