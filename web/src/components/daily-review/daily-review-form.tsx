@@ -4,6 +4,8 @@ import { useActionState, useState, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
 import { TickerReviewEditor } from "./ticker-review-editor";
 import type { DailyReviewRow, GuardrailEntry, MentalStatus, TickerReview } from "@/lib/supabase/types";
+import type { PortfolioPosition } from "@/lib/data/portfolio";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
   CANONICAL_GUARDRAILS,
   GUARDRAIL_STATUSES,
@@ -45,11 +47,15 @@ export function DailyReviewForm({
   tradeDate,
   review,
   suggestedTickers,
+  portfolio,
+  portfolioCapturedAt,
 }: {
   action: (state: DailyReviewFormState, formData: FormData) => Promise<DailyReviewFormState>;
   tradeDate: string;
   review: DailyReviewRow | null;
   suggestedTickers: string[];
+  portfolio: PortfolioPosition[];
+  portfolioCapturedAt: string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
 
@@ -137,6 +143,56 @@ export function DailyReviewForm({
           label="Marktumgebung"
           defaultValue={review?.market_environment ?? ""}
         />
+      </Section>
+
+      <Section title="Portfolio">
+        {portfolio.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-4">Ticker</th>
+                  <th className="py-2 pr-4">Einstiegspreis</th>
+                  <th className="py-2 pr-4">Stückzahl</th>
+                  <th className="py-2 pr-4">PNL %</th>
+                  <th className="py-2 pr-4">PNL $</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {portfolio.map((p) => {
+                  const pnlPct =
+                    p.average_price && p.market_price
+                      ? ((p.market_price - p.average_price) / p.average_price) * 100
+                      : null;
+                  return (
+                    <tr key={p.symbol}>
+                      <td className="py-2 pr-4 font-medium text-foreground">{p.symbol}</td>
+                      <td className="py-2 pr-4 text-foreground">{formatCurrency(p.average_price, p.currency ?? "USD")}</td>
+                      <td className="py-2 pr-4 text-foreground">{p.quantity}</td>
+                      <td className={`py-2 pr-4 ${pnlPct != null && pnlPct < 0 ? "text-negative" : "text-positive"}`}>
+                        {pnlPct != null ? `${pnlPct.toFixed(2)}%` : "–"}
+                      </td>
+                      <td
+                        className={`py-2 pr-4 ${p.unrealized_pnl != null && p.unrealized_pnl < 0 ? "text-negative" : "text-positive"}`}
+                      >
+                        {formatCurrency(p.unrealized_pnl, p.currency ?? "USD")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {portfolioCapturedAt ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Stand: {formatDateTime(portfolioCapturedAt)} (letzter IBKR-Sync — unabhängig vom Review-Datum)
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Noch kein Portfolio synchronisiert — siehe &bdquo;Sync IBKR now&rdquo; auf der Shadowlist-Seite.
+          </p>
+        )}
       </Section>
 
       <Section title="Ticker Reviews">

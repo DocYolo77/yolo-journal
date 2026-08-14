@@ -4,6 +4,7 @@ import { DailyReviewForm } from "@/components/daily-review/daily-review-form";
 import { FinalizeReviewButton } from "@/components/daily-review/finalize-review-button";
 import { getDailyReviewContext } from "@/lib/data/daily-review";
 import { getReportSnapshot } from "@/lib/data/report-snapshot";
+import { getLatestPortfolioPositions } from "@/lib/data/portfolio";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
 import { finalizeDailyReviewAction, saveDailyReviewAction } from "./actions";
 
@@ -35,9 +36,10 @@ export default async function DailyReviewPage({
     </div>
   );
 
-  const [contextResult, snapshotResult] = await Promise.all([
+  const [contextResult, snapshotResult, portfolioResult] = await Promise.all([
     getDailyReviewContext(tradeDate),
     getReportSnapshot(tradeDate),
+    getLatestPortfolioPositions(),
   ]);
 
   if (!contextResult.data) {
@@ -94,6 +96,8 @@ export default async function DailyReviewPage({
             tradeDate={tradeDate}
             review={review}
             suggestedTickers={suggestedTickers}
+            portfolio={portfolioResult.data?.positions ?? []}
+            portfolioCapturedAt={portfolioResult.data?.capturedAt ?? null}
           />
           {review ? (
             <div className="mt-6">
