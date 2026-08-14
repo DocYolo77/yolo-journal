@@ -42,10 +42,15 @@ export function CommitmentForm({
   action,
   lockAction,
   existing,
+  allowLiveMassiveFetch = true,
 }: {
   action: (state: CommitmentFormState, formData: FormData) => Promise<CommitmentFormState>;
   lockAction: (state: CommitmentFormState, formData: FormData) => Promise<CommitmentFormState>;
   existing: CommitmentWithChildren | null;
+  /** False when backfilling a past date — "live" market data is always
+   * as-of now, so it would be misleading to stamp it onto a historical
+   * commitment. */
+  allowLiveMassiveFetch?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyCommitmentFormState);
   const [lockState, lockFormAction, lockPending] = useActionState(lockAction, emptyCommitmentFormState);
@@ -137,15 +142,23 @@ export function CommitmentForm({
                 error={errors.qqqAtrMultiple}
               />
             </div>
-            <button
-              type="button"
-              onClick={handleFetchQqqExtension}
-              disabled={qqqPending}
-              className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
-            >
-              {qqqPending ? "Lädt…" : "Live von Massive laden"}
-            </button>
+            {allowLiveMassiveFetch ? (
+              <button
+                type="button"
+                onClick={handleFetchQqqExtension}
+                disabled={qqqPending}
+                className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface disabled:opacity-60"
+              >
+                {qqqPending ? "Lädt…" : "Live von Massive laden"}
+              </button>
+            ) : null}
           </div>
+          {!allowLiveMassiveFetch ? (
+            <p className="text-xs text-muted-foreground">
+              Live-Abruf ist bei Nacherfassung vergangener Tage deaktiviert — aktuelle Marktdaten passen
+              nicht zu einem historischen Datum. ATR-Multiple bitte manuell eintragen.
+            </p>
+          ) : null}
           {qqqLive.error ? (
             <p className="text-xs text-negative">{qqqLive.error}</p>
           ) : qqqLive.data ? (

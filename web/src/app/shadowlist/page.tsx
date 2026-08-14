@@ -75,7 +75,11 @@ export default async function ShadowlistPage({
             <Link href="/" className="text-accent hover:underline">
               Jetzt committen
             </Link>
-          ) : null}
+          ) : (
+            <Link href={`/?date=${tradeDate}`} className="text-accent hover:underline">
+              Commitment nachtragen
+            </Link>
+          )}
         </div>
       </div>
     );

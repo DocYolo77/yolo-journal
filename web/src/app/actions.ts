@@ -37,7 +37,17 @@ export async function fetchQqqExtensionAction(): Promise<
   }
 }
 
+/**
+ * `tradeDate` is bound by the caller (app/page.tsx), not read from
+ * getCurrentTradeDateET() here, so a Commitment can be saved/locked for
+ * a past date too — an explicit, allowed backfill path ("Nachträglich
+ * erfasst") for a day the user missed, even though it works against the
+ * literal "pre-market" premise. No separate code path: same validation,
+ * same lock/audit semantics, just a caller-chosen date instead of always
+ * "today".
+ */
 export async function saveDraftAction(
+  tradeDate: string,
   _prevState: CommitmentFormState,
   formData: FormData
 ): Promise<CommitmentFormState> {
@@ -47,7 +57,6 @@ export async function saveDraftAction(
     return { fieldErrors: result.fieldErrors, formError: result.formError };
   }
 
-  const tradeDate = getCurrentTradeDateET();
   const supabase = getSupabaseAdmin();
 
   const { data: existing, error: existingError } = await getLatestCommitmentForDate(tradeDate);
@@ -60,7 +69,7 @@ export async function saveDraftAction(
     return {
       fieldErrors: {},
       formError:
-        "Das heutige Commitment ist bereits gelockt und kann nicht mehr als Draft überschrieben werden.",
+        "Das Commitment für dieses Datum ist bereits gelockt und kann nicht mehr als Draft überschrieben werden.",
     };
   }
 
@@ -126,6 +135,7 @@ export async function saveDraftAction(
 }
 
 export async function lockAction(
+  tradeDate: string,
   _prevState: CommitmentFormState,
   formData: FormData
 ): Promise<CommitmentFormState> {
@@ -133,7 +143,6 @@ export async function lockAction(
   // (state, formData) => State signature useActionState expects.
   void formData;
 
-  const tradeDate = getCurrentTradeDateET();
   const supabase = getSupabaseAdmin();
 
   const { data: existing, error: existingError } = await getLatestCommitmentForDate(tradeDate);
@@ -143,7 +152,7 @@ export async function lockAction(
   }
 
   if (!existing) {
-    return { fieldErrors: {}, formError: "Kein Commitment für heute vorhanden." };
+    return { fieldErrors: {}, formError: "Kein Commitment für dieses Datum vorhanden." };
   }
 
   if (existing.status === "LOCKED") {
@@ -187,6 +196,7 @@ export async function lockAction(
 }
 
 export async function reduceRiskAction(
+  tradeDate: string,
   _prevState: CommitmentFormState,
   formData: FormData
 ): Promise<CommitmentFormState> {
@@ -215,7 +225,6 @@ export async function reduceRiskAction(
     return { fieldErrors };
   }
 
-  const tradeDate = getCurrentTradeDateET();
   const supabase = getSupabaseAdmin();
 
   const { data: existing, error: existingError } = await getLatestCommitmentForDate(tradeDate);
@@ -225,7 +234,7 @@ export async function reduceRiskAction(
   }
 
   if (!existing || existing.status !== "LOCKED") {
-    return { fieldErrors: {}, formError: "Es gibt kein gelocktes Commitment für heute." };
+    return { fieldErrors: {}, formError: "Es gibt kein gelocktes Commitment für dieses Datum." };
   }
 
   const currentRisk = existing.intraday_risk_pct;
