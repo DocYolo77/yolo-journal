@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { DailyReviewForm } from "@/components/daily-review/daily-review-form";
+import { FinalizeReviewButton } from "@/components/daily-review/finalize-review-button";
 import { getDailyReviewContext } from "@/lib/data/daily-review";
+import { getReportSnapshot } from "@/lib/data/report-snapshot";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
-import { saveDailyReviewAction } from "./actions";
+import { finalizeDailyReviewAction, saveDailyReviewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,10 @@ export default async function DailyReviewPage({
     </div>
   );
 
-  const contextResult = await getDailyReviewContext(tradeDate);
+  const [contextResult, snapshotResult] = await Promise.all([
+    getDailyReviewContext(tradeDate),
+    getReportSnapshot(tradeDate),
+  ]);
 
   if (!contextResult.data) {
     return (
@@ -50,7 +55,10 @@ export default async function DailyReviewPage({
   const { review, commitment } = contextResult.data;
   const isReconstructed = review?.is_reconstructed ?? commitment === null;
   const suggestedTickers = commitment?.watchlist.map((w) => w.ticker) ?? [];
-  const boundAction = saveDailyReviewAction.bind(null, tradeDate);
+  const boundSaveAction = saveDailyReviewAction.bind(null, tradeDate);
+  const boundFinalizeAction = finalizeDailyReviewAction.bind(null, tradeDate);
+
+  const isFinalized = snapshotResult.data !== null;
 
   return (
     <div>
@@ -68,7 +76,32 @@ export default async function DailyReviewPage({
         </div>
       ) : null}
 
-      <DailyReviewForm action={boundAction} tradeDate={tradeDate} review={review} suggestedTickers={suggestedTickers} />
+      {isFinalized ? (
+        <div className="mb-6 flex items-center justify-between rounded-md border border-positive/40 bg-positive/10 px-3 py-2 text-sm">
+          <span className="text-positive">
+            FINAL — dieser Review wurde abgeschlossen und ist nicht mehr editierbar.
+          </span>
+          <Link href={`/reports/daily/${tradeDate}`} className="font-medium text-accent hover:underline">
+            Report öffnen →
+          </Link>
+        </div>
+      ) : null}
+
+      {isFinalized ? null : (
+        <>
+          <DailyReviewForm
+            action={boundSaveAction}
+            tradeDate={tradeDate}
+            review={review}
+            suggestedTickers={suggestedTickers}
+          />
+          {review ? (
+            <div className="mt-6">
+              <FinalizeReviewButton action={boundFinalizeAction} />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

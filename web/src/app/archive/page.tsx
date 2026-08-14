@@ -51,6 +51,7 @@ export default async function ArchivePage() {
                 <th className="px-4 py-2">Shadowlist</th>
                 <th className="px-4 py-2">Daily Review</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Report</th>
               </tr>
             </thead>
             <tbody>
@@ -60,6 +61,11 @@ export default async function ArchivePage() {
                     <Link href={`/daily-review?date=${entry.tradeDate}`} className="font-medium text-accent hover:underline">
                       {entry.tradeDate}
                     </Link>
+                    {entry.isFinal ? (
+                      <span className="ml-2 inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+                        FINAL
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-2">
                     <Badge ok={entry.hasCommitment} label={entry.hasCommitment ? "vorhanden" : "keins"} />
@@ -78,6 +84,23 @@ export default async function ArchivePage() {
                   <td className="px-4 py-2 text-xs text-muted-foreground">
                     {entry.reviewStatus ?? "–"}
                     {entry.isReconstructed ? " · reconstructed" : ""}
+                  </td>
+                  <td className="px-4 py-2">
+                    {entry.isFinal ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <Link href={`/reports/daily/${entry.tradeDate}`} className="text-accent hover:underline">
+                          Report öffnen
+                        </Link>
+                        <a href={`/reports/daily/${entry.tradeDate}/pdf`} className="text-accent hover:underline">
+                          PDF
+                        </a>
+                        <a href={`/reports/daily/${entry.tradeDate}/json`} className="text-accent hover:underline">
+                          JSON
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">–</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -217,3 +217,90 @@ export type DailyReviewRow = {
   created_at: string;
   updated_at: string;
 };
+
+// 20260814020000_create_daily_report_snapshots.sql
+
+export type ChartSeriesPoint = {
+  date: string; // YYYY-MM-DD
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ema10: number | null;
+  ema20: number | null;
+  sma50: number | null;
+  sma100: number | null;
+  sma200: number | null;
+};
+
+export type IntradayBarPoint = {
+  timestamp: string; // ISO instant
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+export type ChartMarker = {
+  timestamp: string;
+  side: "BUY" | "SELL";
+  price: number;
+  label: string;
+};
+
+export type OrbLevel = {
+  orb_minutes: 5 | 15 | 30;
+  orh: number;
+  orl: number;
+};
+
+export type TickerChartData = {
+  ticker: string;
+  daily: ChartSeriesPoint[];
+  intraday: IntradayBarPoint[];
+  markers: ChartMarker[];
+  orb_levels: OrbLevel[];
+};
+
+export type ReportMarketData = {
+  index_context: { ticker: "QQQ" | "SPY"; daily: ChartSeriesPoint[] }[];
+  tickers: TickerChartData[];
+  fetch_error: string | null;
+};
+
+export type BrokerAccountSnapshotSummary = {
+  net_liquidation_value: number | null;
+  cash: number | null;
+  buying_power: number | null;
+  gross_exposure_pct: number | null;
+  captured_at: string;
+};
+
+export type DailyReportSnapshotData = {
+  report_schema_version: 1;
+  trade_date: string;
+  created_at: string;
+  review: DailyReviewRow;
+  commitment:
+    | (CommitmentRow & {
+        watchlist: CommitmentWatchlistItemRow[];
+        ep_candidates: CommitmentEpCandidateRow[];
+      })
+    | null;
+  shadowlist: ShadowlistDecisionRow[];
+  broker_account_snapshot: BrokerAccountSnapshotSummary | null;
+  market_data: ReportMarketData;
+};
+
+export type DailyReportSnapshotRow = {
+  id: string;
+  user_id: string | null;
+  trade_date: string;
+  report_schema_version: number;
+  snapshot: DailyReportSnapshotData;
+  pdf_storage_path: string | null;
+  pdf_generated_at: string | null;
+  created_at: string;
+};

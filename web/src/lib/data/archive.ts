@@ -8,6 +8,7 @@ export type ArchiveEntry = {
   hasDailyReview: boolean;
   reviewStatus: string | null;
   isReconstructed: boolean;
+  isFinal: boolean;
 };
 
 const LOOKBACK_LIMIT = 365;
@@ -25,25 +26,40 @@ export async function getArchiveEntries(): Promise<
   try {
     const supabase = getSupabaseAdmin();
 
-    const [{ data: commitments, error: commitmentsError }, { data: reviews, error: reviewsError }] =
-      await Promise.all([
-        supabase
-          .from("commitments")
-          .select("id, trade_date, status, revision")
-          .order("trade_date", { ascending: false })
-          .order("revision", { ascending: false })
-          .limit(LOOKBACK_LIMIT),
-        supabase
-          .from("daily_reviews")
-          .select("trade_date, status, is_reconstructed")
-          .order("trade_date", { ascending: false })
-          .limit(LOOKBACK_LIMIT),
-      ]);
+    const [
+      { data: commitments, error: commitmentsError },
+      { data: reviews, error: reviewsError },
+      { data: reportSnapshots, error: reportSnapshotsError },
+    ] = await Promise.all([
+      supabase
+        .from("commitments")
+        .select("id, trade_date, status, revision")
+        .order("trade_date", { ascending: false })
+        .order("revision", { ascending: false })
+        .limit(LOOKBACK_LIMIT),
+      supabase
+        .from("daily_reviews")
+        .select("trade_date, status, is_reconstructed")
+        .order("trade_date", { ascending: false })
+        .limit(LOOKBACK_LIMIT),
+      supabase
+        .from("daily_report_snapshots")
+        .select("trade_date")
+        .order("trade_date", { ascending: false })
+        .limit(LOOKBACK_LIMIT),
+    ]);
 
-    if (commitmentsError || reviewsError) {
-      console.error("getArchiveEntries: base lookup failed", commitmentsError, reviewsError);
+    if (commitmentsError || reviewsError || reportSnapshotsError) {
+      console.error(
+        "getArchiveEntries: base lookup failed",
+        commitmentsError,
+        reviewsError,
+        reportSnapshotsError
+      );
       return { data: null, error: "Archiv konnte nicht geladen werden." };
     }
+
+    const finalDates = new Set((reportSnapshots ?? []).map((r) => r.trade_date as string));
 
     const latestCommitmentByDate = new Map<
       string,
@@ -77,7 +93,11 @@ export async function getArchiveEntries(): Promise<
       reviewByDate.set(row.trade_date, { status: row.status, is_reconstructed: row.is_reconstructed });
     }
 
-    const allDates = new Set<string>([...latestCommitmentByDate.keys(), ...reviewByDate.keys()]);
+    const allDates = new Set<string>([
+      ...latestCommitmentByDate.keys(),
+      ...reviewByDate.keys(),
+      ...finalDates,
+    ]);
 
     const entries: ArchiveEntry[] = Array.from(allDates).map((tradeDate) => {
       const commitment = latestCommitmentByDate.get(tradeDate) ?? null;
@@ -91,6 +111,7 @@ export async function getArchiveEntries(): Promise<
         hasDailyReview: review !== null,
         reviewStatus: review?.status ?? null,
         isReconstructed: review?.is_reconstructed ?? false,
+        isFinal: finalDates.has(tradeDate),
       };
     });
 

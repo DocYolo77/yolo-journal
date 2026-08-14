@@ -1,18 +1,24 @@
 // Thin HTTP client for the Massive REST API (api.massive.com — a
 // Polygon.io-shaped API: identical endpoint paths, field names, and
-// response envelopes). Only this file and massive-provider.ts know the
-// concrete request/response shapes; everything else in the app talks to
-// the MarketDataProvider interface.
+// response envelopes — confirmed again against the live
+// /docs/rest/stocks/aggregates/custom-bars.md reference page, which
+// matches this file's getAggregateBars exactly). Only this file and
+// massive-provider.ts know the concrete request/response shapes;
+// everything else in the app talks to the MarketDataProvider interface.
 //
-// Auth: Massive's own docs (https://massive.com/docs/llms.txt and every
-// endpoint page fetched from it) never state the auth header/param
-// explicitly. Given the API is otherwise a byte-for-byte match of
-// Polygon.io's public API (same paths, same field names, same plan-tier
-// names, same `next_url` cursor convention), this uses Polygon's
-// `Authorization: Bearer <key>` convention. This has NOT been verified
-// against a live key — there is no MASSIVE_API_KEY in this environment.
-// Verify the first real call and swap to `?apiKey=` as a query param
-// instead if Bearer auth 401s.
+// Auth: Massive's docs never state the auth header/param explicitly
+// anywhere (checked /docs/llms.txt and the endpoint reference pages).
+// Since there's no way to test against a live key from this sandbox
+// (MASSIVE_API_KEY only exists in the deployed environment), this client
+// resolves it empirically on first real use instead of shipping a single
+// guess: try Polygon's documented `Authorization: Bearer <key>` header
+// first; if that specific request 401s (and only on 401 — other errors
+// are real failures, not an auth-mechanism problem), retry the exact
+// same request once with `?apiKey=<key>` as a query param instead. The
+// resolved mechanism is cached for the process lifetime so only the
+// very first call pays the retry cost. Whichever one succeeds is logged
+// server-side so this can be simplified to a single hardcoded mechanism
+// once confirmed.
 
 const MASSIVE_API_BASE_URL = "https://api.massive.com";
 
@@ -24,6 +30,20 @@ function getApiKey(): string {
   return key;
 }
 
+type AuthMode = "bearer" | "query";
+// Cached for the lifetime of this server process once a request
+// actually succeeds — avoids re-probing on every call.
+let resolvedAuthMode: AuthMode | null = null;
+
+async function requestWithAuthMode(url: URL, apiKey: string, mode: AuthMode): Promise<Response> {
+  if (mode === "bearer") {
+    return fetch(url.toString(), { headers: { Authorization: `Bearer ${apiKey}` } });
+  }
+  const queryUrl = new URL(url.toString());
+  queryUrl.searchParams.set("apiKey", apiKey);
+  return fetch(queryUrl.toString());
+}
+
 async function massiveFetch<T>(
   path: string,
   params: Record<string, string | number | boolean | undefined> = {}
@@ -33,9 +53,32 @@ async function massiveFetch<T>(
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
-  const response = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${getApiKey()}` },
-  });
+  const apiKey = getApiKey();
+  const firstMode: AuthMode = resolvedAuthMode ?? "bearer";
+
+  let response = await requestWithAuthMode(url, apiKey, firstMode);
+
+  if (response.status === 401 && resolvedAuthMode === null) {
+    const fallbackMode: AuthMode = firstMode === "bearer" ? "query" : "bearer";
+    console.warn(
+      `Massive API: ${firstMode} auth returned 401 for ${path}, retrying once with ${fallbackMode} auth.`
+    );
+    const fallbackResponse = await requestWithAuthMode(url, apiKey, fallbackMode);
+    if (fallbackResponse.ok) {
+      resolvedAuthMode = fallbackMode;
+      console.warn(`Massive API: ${fallbackMode} auth confirmed working — update the client to use it directly.`);
+      response = fallbackResponse;
+    } else {
+      throw new Error(
+        `Massive API request failed with both auth mechanisms (${path}): ` +
+          `bearer=${firstMode === "bearer" ? response.status : fallbackResponse.status}, ` +
+          `query=${firstMode === "query" ? response.status : fallbackResponse.status}. ` +
+          `Check that MASSIVE_API_KEY is correct and active.`
+      );
+    }
+  } else if (response.ok) {
+    resolvedAuthMode = firstMode;
+  }
 
   if (!response.ok) {
     throw new Error(`Massive API request failed: ${response.status} ${response.statusText} (${path})`);

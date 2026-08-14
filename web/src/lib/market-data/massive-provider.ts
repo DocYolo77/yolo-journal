@@ -108,4 +108,17 @@ export class MassiveMarketDataProvider implements MarketDataProvider {
 
     return { price, sma50, atr14, atrExtensionMultiple };
   }
+
+  async getDailyBarsRange(params: { ticker: string; from: string; to: string }): Promise<OhlcBar[]> {
+    const bars = await getAggregateBars({
+      ticker: params.ticker,
+      multiplier: 1,
+      timespan: "day",
+      from: params.from,
+      to: params.to,
+      sort: "asc",
+      limit: 50000,
+    });
+    return bars.map(toOhlcBar);
+  }
 }

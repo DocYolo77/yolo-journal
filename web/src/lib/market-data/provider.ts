@@ -68,4 +68,15 @@ export interface MarketDataProvider {
    * session).
    */
   getIndexExtension(params: { ticker: "QQQ" | "SPY"; tradeDate: string }): Promise<IndexExtensionSnapshot>;
+
+  /**
+   * Daily bars over an explicit [from, to] range, ascending by
+   * timestamp — distinct from getOhlcBars, which is always a single
+   * day. Used for the Daily Report's multi-month daily chart (needs
+   * enough warmup history for SMA200 to be valid at the start of the
+   * visible window). `to` is caller-controlled — the Daily Report
+   * always passes trade_date itself (a day that has already happened
+   * by review time), never a future date.
+   */
+  getDailyBarsRange(params: { ticker: string; from: string; to: string }): Promise<OhlcBar[]>;
 }
