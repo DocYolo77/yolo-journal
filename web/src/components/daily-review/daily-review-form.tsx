@@ -4,8 +4,8 @@ import { useActionState, useState, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
 import { TickerReviewEditor } from "./ticker-review-editor";
 import type { DailyReviewRow, GuardrailEntry, MentalStatus, TickerReview } from "@/lib/supabase/types";
-import type { PortfolioPosition } from "@/lib/data/portfolio";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import type { DailyPnlSnapshot, PortfolioPosition } from "@/lib/data/portfolio";
+import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import {
   CANONICAL_GUARDRAILS,
   GUARDRAIL_STATUSES,
@@ -49,6 +49,7 @@ export function DailyReviewForm({
   suggestedTickers,
   portfolio,
   portfolioCapturedAt,
+  dailyPnlSnapshot,
 }: {
   action: (state: DailyReviewFormState, formData: FormData) => Promise<DailyReviewFormState>;
   tradeDate: string;
@@ -56,6 +57,7 @@ export function DailyReviewForm({
   suggestedTickers: string[];
   portfolio: PortfolioPosition[];
   portfolioCapturedAt: string | null;
+  dailyPnlSnapshot: DailyPnlSnapshot | null;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
 
@@ -123,16 +125,44 @@ export function DailyReviewForm({
           <FieldNumber
             name="netLiquidationValue"
             label="NLV / Portfolio Value"
-            defaultValue={review?.net_liquidation_value != null ? String(review.net_liquidation_value) : ""}
+            defaultValue={
+              review?.net_liquidation_value != null
+                ? String(review.net_liquidation_value)
+                : dailyPnlSnapshot?.nlv != null
+                  ? String(dailyPnlSnapshot.nlv)
+                  : ""
+            }
             error={errors.netLiquidationValue}
           />
           <FieldNumber
             name="dailyPnl"
             label="Daily P&L (optional)"
-            defaultValue={review?.daily_pnl != null ? String(review.daily_pnl) : ""}
+            defaultValue={
+              review?.daily_pnl != null
+                ? String(review.daily_pnl)
+                : dailyPnlSnapshot?.dailyPnlDollar != null
+                  ? String(dailyPnlSnapshot.dailyPnlDollar.toFixed(2))
+                  : ""
+            }
             error={errors.dailyPnl}
           />
         </div>
+        {dailyPnlSnapshot?.nlv != null ? (
+          <p className="text-xs text-muted-foreground">
+            IBKR-Sync: NLV {formatCurrency(dailyPnlSnapshot.nlv, dailyPnlSnapshot.baseCurrency ?? "USD")}
+            {dailyPnlSnapshot.dailyPnlDollar != null ? (
+              <>
+                {" "}
+                · Daily P&L {formatCurrency(dailyPnlSnapshot.dailyPnlDollar, dailyPnlSnapshot.baseCurrency ?? "USD")}
+                {dailyPnlSnapshot.dailyPnlPct != null ? ` (${formatNumber(dailyPnlSnapshot.dailyPnlPct)}%)` : ""}
+                {dailyPnlSnapshot.previousTradingDate ? ` ggü. ${dailyPnlSnapshot.previousTradingDate}` : ""}
+              </>
+            ) : (
+              " · kein Vortag synchronisiert, Daily P&L nicht berechenbar"
+            )}
+            {dailyPnlSnapshot.capturedAt ? ` · Stand ${formatDateTime(dailyPnlSnapshot.capturedAt)}` : ""}
+          </p>
+        ) : null}
         <FieldTextarea
           name="marketThought"
           label="Sessionverlauf und Marktgedanke"
