@@ -14,6 +14,22 @@ import { MassiveMarketDataProvider } from "@/lib/market-data/massive-provider";
 import type { IndexExtensionSnapshot } from "@/lib/market-data/provider";
 
 /**
+ * Appends the real Postgres/Supabase error detail to a generic message,
+ * instead of swallowing it. This is a single-user tool the user is
+ * actively debugging alongside development — showing "column X does not
+ * exist" or "violates check constraint Y" directly is far more useful
+ * here than a generic multi-tenant-app-style "something went wrong",
+ * and it's the only way to diagnose a failure without server log access.
+ */
+function describeSupabaseError(error: { message?: string; code?: string; details?: string; hint?: string } | null): string {
+  if (!error) return "";
+  const parts = [error.message, error.code ? `Code: ${error.code}` : null, error.details, error.hint].filter(
+    Boolean
+  );
+  return parts.length > 0 ? ` (${parts.join(" · ")})` : "";
+}
+
+/**
  * Live QQQ/SPY ATR%-extension lookup for the Commitment form's
  * Index-Lage section (§2) — see computeAtrPctExtensionFromMa in
  * lib/market-data/indicators.ts for the formula. The manual ATR-Multiple
@@ -93,7 +109,10 @@ export async function saveDraftAction(
 
     if (insertError || !inserted) {
       console.error("saveDraftAction: insert commitment failed", insertError);
-      return { fieldErrors: {}, formError: "Commitment konnte nicht gespeichert werden." };
+      return {
+        fieldErrors: {},
+        formError: `Commitment konnte nicht gespeichert werden.${describeSupabaseError(insertError)}`,
+      };
     }
 
     if (watchlist.length > 0) {
@@ -105,7 +124,10 @@ export async function saveDraftAction(
         console.error("saveDraftAction: insert watchlist failed", watchlistError);
         // Compensating rollback — cascades to any partially-inserted rows.
         await supabase.from("commitments").delete().eq("id", inserted.id);
-        return { fieldErrors: {}, formError: "Commitment konnte nicht vollständig gespeichert werden." };
+        return {
+          fieldErrors: {},
+          formError: `Commitment konnte nicht vollständig gespeichert werden.${describeSupabaseError(watchlistError)}`,
+        };
       }
     }
 
@@ -117,7 +139,10 @@ export async function saveDraftAction(
       if (epError) {
         console.error("saveDraftAction: insert ep candidates failed", epError);
         await supabase.from("commitments").delete().eq("id", inserted.id);
-        return { fieldErrors: {}, formError: "Commitment konnte nicht vollständig gespeichert werden." };
+        return {
+          fieldErrors: {},
+          formError: `Commitment konnte nicht vollständig gespeichert werden.${describeSupabaseError(epError)}`,
+        };
       }
     }
 
@@ -130,7 +155,8 @@ export async function saveDraftAction(
     });
   } catch (e) {
     console.error("saveDraftAction failed", e);
-    return { fieldErrors: {}, formError: "Commitment konnte nicht gespeichert werden." };
+    const detail = e instanceof Error ? ` (${e.message})` : "";
+    return { fieldErrors: {}, formError: `Commitment konnte nicht gespeichert werden.${detail}` };
   }
 
   revalidatePath("/");
@@ -179,7 +205,10 @@ export async function lockAction(
 
     if (lockError) {
       console.error("lockAction failed", lockError);
-      return { fieldErrors: {}, formError: "Commitment konnte nicht gelockt werden." };
+      return {
+        fieldErrors: {},
+        formError: `Commitment konnte nicht gelockt werden.${describeSupabaseError(lockError)}`,
+      };
     }
 
     await appendAuditEvent({
@@ -191,7 +220,8 @@ export async function lockAction(
     });
   } catch (e) {
     console.error("lockAction failed", e);
-    return { fieldErrors: {}, formError: "Commitment konnte nicht gelockt werden." };
+    const detail = e instanceof Error ? ` (${e.message})` : "";
+    return { fieldErrors: {}, formError: `Commitment konnte nicht gelockt werden.${detail}` };
   }
 
   revalidatePath("/");
@@ -264,7 +294,10 @@ export async function reduceRiskAction(
 
     if (insertError) {
       console.error("reduceRiskAction: insert risk change failed", insertError);
-      return { fieldErrors: {}, formError: "Risiko-Reduktion konnte nicht gespeichert werden." };
+      return {
+        fieldErrors: {},
+        formError: `Risiko-Reduktion konnte nicht gespeichert werden.${describeSupabaseError(insertError)}`,
+      };
     }
 
     const { error: updateError } = await supabase
@@ -274,7 +307,10 @@ export async function reduceRiskAction(
 
     if (updateError) {
       console.error("reduceRiskAction: update commitment failed", updateError);
-      return { fieldErrors: {}, formError: "Risiko-Reduktion konnte nicht vollständig gespeichert werden." };
+      return {
+        fieldErrors: {},
+        formError: `Risiko-Reduktion konnte nicht vollständig gespeichert werden.${describeSupabaseError(updateError)}`,
+      };
     }
 
     await appendAuditEvent({
@@ -286,7 +322,8 @@ export async function reduceRiskAction(
     });
   } catch (e) {
     console.error("reduceRiskAction failed", e);
-    return { fieldErrors: {}, formError: "Risiko-Reduktion konnte nicht gespeichert werden." };
+    const detail = e instanceof Error ? ` (${e.message})` : "";
+    return { fieldErrors: {}, formError: `Risiko-Reduktion konnte nicht gespeichert werden.${detail}` };
   }
 
   revalidatePath("/");
