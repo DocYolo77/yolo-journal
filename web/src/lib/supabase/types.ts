@@ -300,6 +300,14 @@ export type TickerChartData = {
   ticker: string;
   daily: ChartSeriesPoint[];
   intraday: IntradayBarPoint[];
+  /**
+   * Real prior-session RTH bars strictly before this report's trade_date
+   * — invisible on the chart, used only to seed MACD's EMA(20)/EMA(9)
+   * so the indicator isn't null/flat for the first ~2h20m after 09:30.
+   * Optional: reports finalized before this field existed have none in
+   * their immutable stored snapshot.
+   */
+  intraday_warmup?: IntradayBarPoint[];
   markers: ChartMarker[];
   orb_levels: OrbLevel[];
 };
@@ -316,6 +324,46 @@ export type BrokerAccountSnapshotSummary = {
   buying_power: number | null;
   gross_exposure_pct: number | null;
   captured_at: string;
+  /**
+   * The snapshot's real trading_date — may differ from the report's
+   * trade_date when IBKR's own EOD batch hadn't finished processing the
+   * requested day yet at sync time (see getDailyPnlSnapshotForDate).
+   * Always label a mismatch honestly instead of implying same-day data.
+   */
+  trading_date: string | null;
+};
+
+export type DailyReportCampaignFill = {
+  side: "BUY" | "SELL";
+  price: number | null;
+  quantity: number;
+  executed_at: string;
+};
+
+/** One of today's economic campaigns (see campaigns table) — real IBKR fills, not raw clicks. */
+export type DailyReportCampaign = {
+  id: string;
+  symbol: string;
+  direction: string | null;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  realized_pnl: number | null;
+  fills: DailyReportCampaignFill[];
+};
+
+export type DailyReportPortfolioPosition = {
+  symbol: string;
+  quantity: number;
+  average_price: number | null;
+  market_price: number | null;
+  unrealized_pnl: number | null;
+  currency: string | null;
+};
+
+export type DailyReportPortfolioSnapshot = {
+  captured_at: string | null;
+  positions: DailyReportPortfolioPosition[];
 };
 
 export type DailyReportSnapshotData = {
@@ -332,6 +380,21 @@ export type DailyReportSnapshotData = {
   shadowlist: ShadowlistDecisionRow[];
   broker_account_snapshot: BrokerAccountSnapshotSummary | null;
   market_data: ReportMarketData;
+  /**
+   * Today's economic campaigns with real entry/add/exit fills (price,
+   * time, quantity) — sourced from campaigns/campaign_executions/
+   * broker_executions. Optional because reports finalized before this
+   * field existed have no such data in their immutable stored snapshot;
+   * always fall back to [] rather than fail rendering old reports.
+   */
+  campaigns?: DailyReportCampaign[];
+  /**
+   * The full IBKR portfolio snapshot nearest this trade_date — covers
+   * both same-day campaign positions and older carried positions (the
+   * legacy "old positions separated from same-day campaigns" rule).
+   * Optional for the same reason as `campaigns` above.
+   */
+  portfolio_snapshot?: DailyReportPortfolioSnapshot;
 };
 
 export type DailyReportSnapshotRow = {

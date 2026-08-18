@@ -55,6 +55,10 @@ function fmt(value: number | null): string {
   return value == null ? "–" : value.toLocaleString("de-DE", { maximumFractionDigits: 2 });
 }
 
+function fmtDT(value: string | null): string {
+  return value ? new Date(value).toLocaleString("de-DE") : "–";
+}
+
 export function DailyReportPdfDocument({
   snapshot,
   chartImages,
@@ -63,6 +67,9 @@ export function DailyReportPdfDocument({
   chartImages: ChartImages;
 }) {
   const { review, commitment, shadowlist } = snapshot;
+  const campaigns = snapshot.campaigns ?? [];
+  const portfolioPositions = snapshot.portfolio_snapshot?.positions ?? [];
+  const portfolioCapturedAt = snapshot.portfolio_snapshot?.captured_at ?? null;
 
   return (
     <Document>
@@ -76,6 +83,75 @@ export function DailyReportPdfDocument({
         <Section title="Portfolio">
           <DetailRow label="NLV / Portfolio Value" value={fmt(review.net_liquidation_value)} />
           <DetailRow label="Daily P&L" value={fmt(review.daily_pnl)} />
+          {snapshot.broker_account_snapshot ? (
+            <DetailRow
+              label="Broker-Snapshot"
+              value={
+                fmt(snapshot.broker_account_snapshot.net_liquidation_value) +
+                (snapshot.broker_account_snapshot.trading_date &&
+                snapshot.broker_account_snapshot.trading_date !== snapshot.trade_date
+                  ? ` (IBKR-Stand vom ${snapshot.broker_account_snapshot.trading_date})`
+                  : "")
+              }
+            />
+          ) : (
+            <DetailRow label="Broker-Snapshot" value="keine Broker-Daten für diesen Tag" />
+          )}
+        </Section>
+
+        <Section title="Campaigns — Entry-Daten (IBKR)">
+          {campaigns.length > 0 ? (
+            campaigns.map((c) => (
+              <View key={c.id} style={styles.tickerBlock}>
+                <Text style={styles.sectionTitle}>
+                  {c.symbol} · {c.direction ?? "–"} · {c.status}
+                  {c.realized_pnl != null ? ` · Realized ${fmt(c.realized_pnl)}` : ""}
+                </Text>
+                <View style={styles.tableHeader}>
+                  <Text style={styles.cellLabel}>Zeit</Text>
+                  <Text style={styles.cellLabel}>Seite</Text>
+                  <Text style={styles.cellLabel}>Preis</Text>
+                  <Text style={styles.cellLabel}>Menge</Text>
+                </View>
+                {c.fills.map((f, i) => (
+                  <View key={i} style={styles.tableRow}>
+                    <Text style={styles.cell}>{fmtDT(f.executed_at)}</Text>
+                    <Text style={styles.cell}>{f.side}</Text>
+                    <Text style={styles.cell}>{fmt(f.price)}</Text>
+                    <Text style={styles.cell}>{String(f.quantity)}</Text>
+                  </View>
+                ))}
+              </View>
+            ))
+          ) : (
+            <Text style={styles.paragraph}>Keine Campaigns für diesen Tag synchronisiert.</Text>
+          )}
+        </Section>
+
+        <Section title="Portfolio-Snapshot (IBKR, inkl. Altpositionen)">
+          {portfolioPositions.length > 0 ? (
+            <>
+              <Text style={styles.label}>Stand {fmtDT(portfolioCapturedAt)}</Text>
+              <View style={styles.tableHeader}>
+                <Text style={styles.cellLabel}>Ticker</Text>
+                <Text style={styles.cellLabel}>Menge</Text>
+                <Text style={styles.cellLabel}>Ø Entry</Text>
+                <Text style={styles.cellLabel}>Marktpreis</Text>
+                <Text style={styles.cellLabel}>Unrealized P&L</Text>
+              </View>
+              {portfolioPositions.map((p) => (
+                <View key={p.symbol} style={styles.tableRow}>
+                  <Text style={styles.cell}>{p.symbol}</Text>
+                  <Text style={styles.cell}>{String(p.quantity)}</Text>
+                  <Text style={styles.cell}>{fmt(p.average_price)}</Text>
+                  <Text style={styles.cell}>{fmt(p.market_price)}</Text>
+                  <Text style={styles.cell}>{fmt(p.unrealized_pnl)}</Text>
+                </View>
+              ))}
+            </>
+          ) : (
+            <Text style={styles.paragraph}>Kein Portfolio-Snapshot für diesen Tag verfügbar.</Text>
+          )}
         </Section>
 
         <Section title="Markt-Review">
@@ -152,6 +228,18 @@ export function DailyReportPdfDocument({
           {review.coaching_take ? (
             <Text style={styles.paragraph}>Coaching Take: {review.coaching_take}</Text>
           ) : null}
+        </Section>
+
+        <Section title="Was willst du konkret verbessern?">
+          {review.operational_todos.length > 0 ? (
+            review.operational_todos.map((todo, i) => (
+              <Text key={i} style={styles.paragraph}>
+                • {todo}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.paragraph}>Keine Verbesserungspunkte erfasst.</Text>
+          )}
         </Section>
       </Page>
 

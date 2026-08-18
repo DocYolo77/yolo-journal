@@ -83,7 +83,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ dat
         ticker: t.ticker,
         dailyDataUri: await svgToPngDataUri(renderDailyChartSvg(t.ticker, t.daily)),
         intradayDataUri: await svgToPngDataUri(
-          renderIntradayChartSvg(t.ticker, t.intraday, t.orb_levels, t.markers)
+          renderIntradayChartSvg(t.ticker, t.intraday, t.orb_levels, t.markers, t.intraday_warmup ?? [])
         ),
       }))
     );

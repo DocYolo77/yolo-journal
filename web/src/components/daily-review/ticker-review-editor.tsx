@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ENTRY_TACTIC_OPTIONS,
   EXIT_SETUP_OPTIONS,
@@ -252,21 +253,38 @@ export function TickerReviewEditor({
 }
 
 function ManualTickerAdd({ onAdd }: { onAdd: (ticker: string) => void }) {
+  const [value, setValue] = useState("");
+
+  function submit() {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setValue("");
+  }
+
   return (
-    <form
-      className="flex items-center gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const form = e.currentTarget;
-        const input = form.elements.namedItem("manualTicker") as HTMLInputElement;
-        onAdd(input.value);
-        input.value = "";
-      }}
-    >
-      <input name="manualTicker" placeholder="Ticker manuell" className={`w-28 ${inputClass}`} />
-      <button type="submit" className="text-sm text-accent hover:underline">
+    // Deliberately not a nested <form> — this sits inside
+    // DailyReviewForm's own <form action={formAction}>, and nested
+    // forms are invalid HTML that browsers handle inconsistently
+    // (native submit firing on the wrong form, unexpected navigation).
+    // Same plain div + Enter-to-submit pattern as the operational-todos
+    // adder further down this page.
+    <div className="flex items-center gap-2">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder="Ticker manuell"
+        className={`w-28 ${inputClass}`}
+      />
+      <button type="button" onClick={submit} className="text-sm text-accent hover:underline">
         + hinzufügen
       </button>
-    </form>
+    </div>
   );
 }

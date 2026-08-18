@@ -88,6 +88,43 @@ export async function getIntradayChartSeries(ticker: string, tradeDate: string):
     }));
 }
 
+// MACD(6,20,9) needs the slow EMA(20) then the signal EMA(9) seeded —
+// 28 bars — before it's valid; kept generously above that so the line
+// is stable, not barely-seeded, right at 09:30.
+const INTRADAY_WARMUP_MIN_BARS = 60;
+// Calendar (not trading) days to search backward for those bars — wide
+// enough to cross weekends and multi-day holiday runs. Massive simply
+// returns no bars for closed days, so this needs no explicit trading
+// calendar: whatever real RTH bars exist in the window are used, and
+// the most recent INTRADAY_WARMUP_MIN_BARS of them are kept.
+const INTRADAY_WARMUP_LOOKBACK_CALENDAR_DAYS = 12;
+
+/**
+ * Real prior-session 5-minute RTH bars strictly before `tradeDate`, used
+ * only to seed the intraday chart's MACD before the first visible 09:30
+ * bar — never displayed themselves (see renderIntradayChartSvg). Bug fix
+ * for MACD showing null/flat for the first ~2h20m of every session: it
+ * was being computed from a bar array that started at 09:30 with zero
+ * prior history to seed EMA(20)/EMA(9) from.
+ */
+export async function getIntradayWarmupBars(ticker: string, tradeDate: string): Promise<IntradayBarPoint[]> {
+  const provider = new MassiveMarketDataProvider();
+  const from = shiftTradeDate(tradeDate, -INTRADAY_WARMUP_LOOKBACK_CALENDAR_DAYS);
+  const to = shiftTradeDate(tradeDate, -1);
+  const bars = await provider.getIntradayBarsRange({ ticker, from, to, interval: "5m" });
+  const rthOnly = bars
+    .filter((b) => isWithinRth(b.timestamp))
+    .map((b) => ({
+      timestamp: b.timestamp,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+      volume: b.volume,
+    }));
+  return rthOnly.slice(-INTRADAY_WARMUP_MIN_BARS);
+}
+
 /**
  * ORB levels actually derivable from the real intraday bars — reuses
  * the same computeOrbShadowResult as the Shadowlist's shadow model, so

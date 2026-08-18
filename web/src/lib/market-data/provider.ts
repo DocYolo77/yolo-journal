@@ -79,4 +79,20 @@ export interface MarketDataProvider {
    * by review time), never a future date.
    */
   getDailyBarsRange(params: { ticker: string; from: string; to: string }): Promise<OhlcBar[]>;
+
+  /**
+   * Intraday bars over an explicit [from, to] calendar-date range,
+   * ascending by timestamp — used to fetch prior-session 5-minute bars
+   * to seed MACD's EMA(20)+EMA(9) before the first visible RTH bar of a
+   * trade_date (see chart-data.ts's getIntradayWarmupBars). Unlike
+   * getOhlcBars this can span multiple days, so weekends/holidays are
+   * simply days that come back with zero bars rather than needing an
+   * explicit trading calendar.
+   */
+  getIntradayBarsRange(params: {
+    ticker: string;
+    from: string;
+    to: string;
+    interval: OhlcInterval;
+  }): Promise<OhlcBar[]>;
 }

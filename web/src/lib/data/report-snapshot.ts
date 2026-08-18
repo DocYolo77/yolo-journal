@@ -1,13 +1,17 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getDailyReviewContext } from "./daily-review";
+import { getPortfolioSnapshotForDate } from "./portfolio";
 import {
   computeOrbLevelsFromIntraday,
   getDailyChartSeries,
   getIntradayChartSeries,
+  getIntradayWarmupBars,
 } from "@/lib/market-data/chart-data";
 import { appendAuditEvent } from "@/lib/audit";
+import { computeCampaignRealizedPnl, fetchFillsForCampaigns } from "@/lib/campaigns/realized-pnl";
 import type {
   ChartMarker,
+  DailyReportCampaign,
   DailyReportSnapshotData,
   DailyReportSnapshotRow,
   ReportMarketData,
@@ -123,12 +127,20 @@ async function assembleMarketData(
 
     const tickerData: TickerChartData[] = await Promise.all(
       tickers.map(async (ticker) => {
-        const [daily, intraday, markers] = await Promise.all([
+        const [daily, intraday, intradayWarmup, markers] = await Promise.all([
           getDailyChartSeries(ticker, tradeDate),
           getIntradayChartSeries(ticker, tradeDate),
+          getIntradayWarmupBars(ticker, tradeDate),
           getMarkersForTicker(supabase, tradeDate, ticker),
         ]);
-        return { ticker, daily, intraday, markers, orb_levels: computeOrbLevelsFromIntraday(intraday) };
+        return {
+          ticker,
+          daily,
+          intraday,
+          intraday_warmup: intradayWarmup,
+          markers,
+          orb_levels: computeOrbLevelsFromIntraday(intraday),
+        };
       })
     );
 
@@ -141,6 +153,50 @@ async function assembleMarketData(
     // this error instead of charts.
     return { index_context: [], tickers: [], fetch_error: message };
   }
+}
+
+/**
+ * Today's economic campaigns with full entry/add/exit fill data (price,
+ * time, quantity) — the tabular counterpart to getMarkersForTicker's
+ * chart dots. Real IBKR fills only (campaigns -> campaign_executions ->
+ * broker_executions); empty when nothing has synced for this day yet.
+ */
+async function assembleCampaignData(
+  supabase: SupabaseAdminClient,
+  tradeDate: string
+): Promise<DailyReportCampaign[]> {
+  const { data: campaignRows } = await supabase
+    .from("campaigns")
+    .select("id, symbol, direction, status, started_at, ended_at")
+    .eq("trade_date", tradeDate)
+    .order("started_at", { ascending: true });
+
+  const campaigns = campaignRows ?? [];
+  if (campaigns.length === 0) return [];
+
+  const fillsByCampaignId = await fetchFillsForCampaigns(
+    supabase,
+    campaigns.map((c) => ({ id: c.id as string }))
+  );
+
+  return campaigns.map((c) => {
+    const fills = fillsByCampaignId.get(c.id as string) ?? [];
+    return {
+      id: c.id as string,
+      symbol: c.symbol as string,
+      direction: (c.direction as string | null) ?? null,
+      status: c.status as string,
+      started_at: (c.started_at as string | null) ?? null,
+      ended_at: (c.ended_at as string | null) ?? null,
+      realized_pnl: c.status === "closed" ? computeCampaignRealizedPnl(fills) : null,
+      fills: fills.map((f) => ({
+        side: f.side,
+        price: f.price,
+        quantity: f.quantity,
+        executed_at: f.executed_at,
+      })),
+    };
+  });
 }
 
 /**
@@ -199,21 +255,59 @@ export async function finalizeDailyReview(
       shadowlist = shadowlistRows ?? [];
     }
 
-    const { data: brokerRow, error: brokerError } = await supabase
+    const brokerSelect = "net_liquidation_value, cash, buying_power, gross_exposure_pct, captured_at, trading_date";
+
+    const { data: exactBrokerRow, error: exactBrokerError } = await supabase
       .from("broker_account_snapshots")
-      .select("net_liquidation_value, cash, buying_power, gross_exposure_pct, captured_at")
+      .select(brokerSelect)
       .eq("trading_date", tradeDate)
       .order("captured_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (brokerError) {
+    if (exactBrokerError) {
       // Best-effort only — broker sync may simply never have run yet.
-      console.error("finalizeDailyReview: broker snapshot lookup failed (continuing)", brokerError);
+      console.error("finalizeDailyReview: broker snapshot lookup failed (continuing)", exactBrokerError);
+    }
+
+    let brokerRow = exactBrokerRow ?? null;
+
+    if (!brokerRow && !exactBrokerError) {
+      // IBKR's Activity Flex Query ("LastBusinessDay") can still be
+      // reporting yesterday's statement at sync time even though today's
+      // campaigns (execution-timestamp-derived) already exist — fall back
+      // to the nearest snapshot on or before tradeDate rather than
+      // silently showing "keine Broker-Daten" (same fix as
+      // getDailyPnlSnapshotForDate in lib/data/portfolio.ts).
+      const { data: fallbackBrokerRow, error: fallbackBrokerError } = await supabase
+        .from("broker_account_snapshots")
+        .select(brokerSelect)
+        .lte("trading_date", tradeDate)
+        .order("trading_date", { ascending: false })
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fallbackBrokerError) {
+        console.error("finalizeDailyReview: broker snapshot fallback lookup failed (continuing)", fallbackBrokerError);
+      } else {
+        brokerRow = fallbackBrokerRow ?? null;
+      }
     }
 
     const tickers = Array.from(new Set(review.ticker_reviews.map((t) => t.ticker)));
     const marketData = await assembleMarketData(supabase, tradeDate, tickers);
+
+    let campaigns: DailyReportCampaign[] = [];
+    try {
+      campaigns = await assembleCampaignData(supabase, tradeDate);
+    } catch (e) {
+      console.error("finalizeDailyReview: campaign data assembly failed (continuing)", e);
+    }
+
+    // Best-effort — same as the broker account snapshot above, never
+    // blocks finalization if IBKR positions haven't synced.
+    const portfolioSnapshot = await getPortfolioSnapshotForDate(tradeDate);
 
     const snapshot: DailyReportSnapshotData = {
       report_schema_version: 1,
@@ -224,6 +318,11 @@ export async function finalizeDailyReview(
       shadowlist,
       broker_account_snapshot: brokerRow ?? null,
       market_data: marketData,
+      campaigns,
+      portfolio_snapshot: {
+        captured_at: portfolioSnapshot.capturedAt,
+        positions: portfolioSnapshot.positions,
+      },
     };
 
     const { data: inserted, error: insertError } = await supabase

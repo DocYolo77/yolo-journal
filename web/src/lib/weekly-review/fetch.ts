@@ -6,17 +6,10 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getDailyChartSeries } from "@/lib/market-data/chart-data";
+import { fetchFillsForCampaigns, type CampaignFill } from "@/lib/campaigns/realized-pnl";
 import type { CampaignRow, ChartSeriesPoint, DailyReviewRow, ShadowlistDecisionRow } from "@/lib/supabase/types";
 
-type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
-
-export type CampaignFill = {
-  side: "BUY" | "SELL";
-  price: number | null;
-  quantity: number;
-  commission: number | null;
-  executed_at: string;
-};
+export type { CampaignFill };
 
 export type AccountSnapshotPoint = {
   trading_date: string;
@@ -195,46 +188,3 @@ export async function getSourceDailyReportIds(weekStart: string, weekEnd: string
   return (data ?? []).map((r) => r.id as string);
 }
 
-async function fetchFillsForCampaigns(
-  supabase: SupabaseAdminClient,
-  campaigns: CampaignRow[]
-): Promise<Map<string, CampaignFill[]>> {
-  const result = new Map<string, CampaignFill[]>();
-  if (campaigns.length === 0) return result;
-
-  const campaignIds = campaigns.map((c) => c.id);
-  const { data: links } = await supabase
-    .from("campaign_executions")
-    .select("campaign_id, broker_execution_id")
-    .in("campaign_id", campaignIds);
-
-  const executionIds = (links ?? []).map((l) => l.broker_execution_id as string);
-  if (executionIds.length === 0) return result;
-
-  const { data: executions } = await supabase
-    .from("broker_executions")
-    .select("id, side, price, quantity, commission, executed_at")
-    .in("id", executionIds);
-
-  const executionById = new Map((executions ?? []).map((e) => [e.id as string, e]));
-
-  for (const link of links ?? []) {
-    const execution = executionById.get(link.broker_execution_id as string);
-    if (!execution) continue;
-    const campaignId = link.campaign_id as string;
-    if (!result.has(campaignId)) result.set(campaignId, []);
-    result.get(campaignId)!.push({
-      side: execution.side as "BUY" | "SELL",
-      price: (execution.price as number | null) ?? null,
-      quantity: Number(execution.quantity),
-      commission: (execution.commission as number | null) ?? null,
-      executed_at: execution.executed_at as string,
-    });
-  }
-
-  for (const fills of result.values()) {
-    fills.sort((a, b) => a.executed_at.localeCompare(b.executed_at));
-  }
-
-  return result;
-}

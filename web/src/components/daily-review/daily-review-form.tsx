@@ -161,6 +161,12 @@ export function DailyReviewForm({
               " · kein Vortag synchronisiert, Daily P&L nicht berechenbar"
             )}
             {dailyPnlSnapshot.capturedAt ? ` · Stand ${formatDateTime(dailyPnlSnapshot.capturedAt)}` : ""}
+            {dailyPnlSnapshot.nlvTradingDate && dailyPnlSnapshot.nlvTradingDate !== tradeDate ? (
+              <span className="text-negative">
+                {" "}
+                · IBKR-Stand vom {dailyPnlSnapshot.nlvTradingDate} (noch kein Sync für {tradeDate} verfügbar)
+              </span>
+            ) : null}
           </p>
         ) : null}
         <FieldTextarea

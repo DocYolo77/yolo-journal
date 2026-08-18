@@ -67,6 +67,78 @@ export function LockedCommitmentView({
       </section>
 
       <section className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold text-foreground">2 · Index-Lage (QQQ/SPY)</h3>
+        <DetailGrid
+          items={[
+            [
+              "QQQ ATR-Multiple",
+              commitment.qqq_extension_atr_multiple != null ? String(commitment.qqq_extension_atr_multiple) : "–",
+            ],
+            ["QQQ Risk-Cap aktiv", commitment.qqq_extension_cap_active ? "ja (0.5%)" : "nein"],
+            [
+              "SPY ATR-Multiple",
+              commitment.spy_extension_atr_multiple != null ? String(commitment.spy_extension_atr_multiple) : "–",
+            ],
+          ]}
+        />
+        {commitment.qqq_extension_note ? (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Notiz</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{commitment.qqq_extension_note}</p>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold text-foreground">3 · MTD % — nur neue Entries</h3>
+        <DetailGrid
+          items={[
+            ["MTD % (manuell)", commitment.mtd_manual_pct != null ? `${commitment.mtd_manual_pct}%` : "–"],
+            [
+              "Auto Fresh-Entry realized %",
+              commitment.mtd_auto_fresh_entry_realized_pct != null
+                ? `${commitment.mtd_auto_fresh_entry_realized_pct}%`
+                : "–",
+            ],
+            ["MTD-Pause-Schwelle", commitment.mtd_pause_threshold_reached ? "erreicht (≤ -7.5%)" : "nicht erreicht"],
+          ]}
+        />
+        {commitment.mtd_note ? (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Notiz</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{commitment.mtd_note}</p>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold text-foreground">4 · Verlustzähler</h3>
+        <DetailGrid
+          items={[
+            [
+              "Verlustzähler (manuell)",
+              commitment.loss_state_manual_counter != null ? String(commitment.loss_state_manual_counter) : "–",
+            ],
+            [
+              "Verlustzähler (auto)",
+              commitment.loss_state_auto_counter != null ? String(commitment.loss_state_auto_counter) : "–",
+            ],
+            ["Reduced-Size-Mode", commitment.loss_state_reduced_size_mode ? "aktiv (ab 6 Verlusten)" : "inaktiv"],
+            [
+              "Pflicht-Review-Warnung",
+              commitment.loss_state_review_trigger_reached ? "ausgelöst (ab 10 Verlusten)" : "nicht ausgelöst",
+            ],
+          ]}
+        />
+        {commitment.loss_state_note ? (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Notiz</p>
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">{commitment.loss_state_note}</p>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <h3 className="text-sm font-semibold text-foreground">5 · Watchlist ({commitment.watchlist.length})</h3>
         {commitment.watchlist.length > 0 ? (
           <div className="overflow-x-auto">

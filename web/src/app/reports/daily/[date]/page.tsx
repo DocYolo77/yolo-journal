@@ -38,6 +38,9 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
 
   const snapshot = result.data.snapshot;
   const { review, commitment, shadowlist, broker_account_snapshot, market_data } = snapshot;
+  const campaigns = snapshot.campaigns ?? [];
+  const portfolioPositions = snapshot.portfolio_snapshot?.positions ?? [];
+  const portfolioCapturedAt = snapshot.portfolio_snapshot?.captured_at ?? null;
 
   return (
     <div className="space-y-6">
@@ -69,11 +72,103 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
             [
               "Broker-Snapshot",
               broker_account_snapshot
-                ? `${formatCurrency(broker_account_snapshot.net_liquidation_value)} (erfasst ${formatDateTime(broker_account_snapshot.captured_at)})`
+                ? `${formatCurrency(broker_account_snapshot.net_liquidation_value)} (erfasst ${formatDateTime(broker_account_snapshot.captured_at)}` +
+                  (broker_account_snapshot.trading_date && broker_account_snapshot.trading_date !== snapshot.trade_date
+                    ? `, IBKR-Stand vom ${broker_account_snapshot.trading_date})`
+                    : ")")
                 : "keine Broker-Daten für diesen Tag",
             ],
           ]}
         />
+      </Section>
+
+      <Section title="Campaigns — Entry-Daten (IBKR)">
+        {campaigns.length > 0 ? (
+          <div className="space-y-4">
+            {campaigns.map((c) => (
+              <div key={c.id} className="rounded-md border border-border p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium text-foreground">{c.symbol}</span>
+                  <span className="text-xs text-muted-foreground">{c.direction ?? "–"}</span>
+                  <span
+                    className={
+                      c.status === "closed" ? "text-xs text-muted-foreground" : "text-xs text-accent"
+                    }
+                  >
+                    {c.status}
+                  </span>
+                  {c.realized_pnl != null ? (
+                    <span className={c.realized_pnl >= 0 ? "text-xs text-positive" : "text-xs text-negative"}>
+                      Realized {formatCurrency(c.realized_pnl)}
+                    </span>
+                  ) : null}
+                </div>
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="py-1 pr-4">Zeit</th>
+                      <th className="py-1 pr-4">Seite</th>
+                      <th className="py-1 pr-4 text-right">Preis</th>
+                      <th className="py-1 pr-4 text-right">Menge</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {c.fills.map((f, i) => (
+                      <tr key={i}>
+                        <td className="py-1 pr-4 text-muted-foreground">{formatDateTime(f.executed_at)}</td>
+                        <td className="py-1 pr-4 text-foreground">{f.side}</td>
+                        <td className="py-1 pr-4 text-right text-foreground">{formatCurrency(f.price)}</td>
+                        <td className="py-1 pr-4 text-right text-foreground">{f.quantity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Keine Campaigns für diesen Tag synchronisiert.</p>
+        )}
+      </Section>
+
+      <Section title="Portfolio-Snapshot (IBKR, inkl. Altpositionen)">
+        {portfolioPositions.length > 0 ? (
+          <>
+            {portfolioCapturedAt ? (
+              <p className="mb-2 text-xs text-muted-foreground">Stand {formatDateTime(portfolioCapturedAt)}</p>
+            ) : null}
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-4">Ticker</th>
+                  <th className="py-2 pr-4 text-right">Menge</th>
+                  <th className="py-2 pr-4 text-right">Ø Entry</th>
+                  <th className="py-2 pr-4 text-right">Marktpreis</th>
+                  <th className="py-2 pr-4 text-right">Unrealized P&L</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {portfolioPositions.map((p) => (
+                  <tr key={p.symbol}>
+                    <td className="py-2 pr-4 font-medium text-foreground">{p.symbol}</td>
+                    <td className="py-2 pr-4 text-right text-foreground">{p.quantity}</td>
+                    <td className="py-2 pr-4 text-right text-foreground">{formatCurrency(p.average_price)}</td>
+                    <td className="py-2 pr-4 text-right text-foreground">{formatCurrency(p.market_price)}</td>
+                    <td
+                      className={`py-2 pr-4 text-right ${
+                        (p.unrealized_pnl ?? 0) >= 0 ? "text-positive" : "text-negative"
+                      }`}
+                    >
+                      {formatCurrency(p.unrealized_pnl)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Kein Portfolio-Snapshot für diesen Tag verfügbar.</p>
+        )}
       </Section>
 
       <Section title="Markt-Review">
@@ -198,7 +293,13 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
                     <div className="mt-3 space-y-3">
                       <InlineSvg svg={renderDailyChartSvg(t.ticker, chart.daily)} />
                       <InlineSvg
-                        svg={renderIntradayChartSvg(t.ticker, chart.intraday, chart.orb_levels, chart.markers)}
+                        svg={renderIntradayChartSvg(
+                          t.ticker,
+                          chart.intraday,
+                          chart.orb_levels,
+                          chart.markers,
+                          chart.intraday_warmup ?? []
+                        )}
                       />
                     </div>
                   ) : (
@@ -247,13 +348,18 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
         {review.coaching_take ? (
           <p className="text-sm text-muted-foreground">Coaching Take: {review.coaching_take}</p>
         ) : null}
+      </Section>
+
+      <Section title="Was willst du konkret verbessern?">
         {review.operational_todos.length > 0 ? (
-          <ul className="list-inside list-disc text-sm text-muted-foreground">
+          <ul className="list-inside list-disc space-y-1 text-sm text-foreground">
             {review.operational_todos.map((todo, i) => (
               <li key={i}>{todo}</li>
             ))}
           </ul>
-        ) : null}
+        ) : (
+          <p className="text-sm text-muted-foreground">Keine Verbesserungspunkte erfasst.</p>
+        )}
       </Section>
     </div>
   );

@@ -236,7 +236,8 @@ export function renderIntradayChartSvg(
   ticker: string,
   bars: IntradayBarPoint[],
   orbLevels: OrbLevel[],
-  markers: ChartMarker[]
+  markers: ChartMarker[],
+  warmupBars: IntradayBarPoint[] = []
 ): string {
   if (bars.length === 0) {
     return emptyChartSvg(`${ticker} — Intraday: keine Marktdaten verfügbar`, INTRADAY_HEIGHT);
@@ -247,7 +248,17 @@ export function renderIntradayChartSvg(
     INTRADAY_LEFT + (bars.length === 1 ? innerWidth / 2 : (i / (bars.length - 1)) * innerWidth);
 
   const vwap = computeSessionVwapSeries(bars);
-  const { macd, signal, histogram } = computeMacdSeries(bars.map((b) => ({ close: b.close })), 6, 20, 9);
+  // MACD needs the slow EMA(20) then signal EMA(9) seeded (28 bars)
+  // before it's valid — without prior-session warmup bars the line
+  // would be null for roughly the first 2h20m of every RTH session.
+  // Computed over warmup+bars combined, then sliced back down to
+  // bars.length so the x-axis still starts exactly at the first visible
+  // (09:30 ET) bar — the warmup bars themselves are never displayed.
+  const macdInput = [...warmupBars, ...bars].map((b) => ({ close: b.close }));
+  const fullMacd = computeMacdSeries(macdInput, 6, 20, 9);
+  const macd = fullMacd.macd.slice(warmupBars.length);
+  const signal = fullMacd.signal.slice(warmupBars.length);
+  const histogram = fullMacd.histogram.slice(warmupBars.length);
 
   // --- Price panel ---
   const highs = bars.map((b) => b.high);

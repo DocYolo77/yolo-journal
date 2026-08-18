@@ -7,6 +7,7 @@
 // instruction.
 
 import { CANONICAL_GUARDRAILS } from "@/lib/validation/daily-review";
+import { computeCampaignRealizedPnl } from "@/lib/campaigns/realized-pnl";
 import type {
   CampaignRow,
   GuardrailEntry,
@@ -25,19 +26,7 @@ import type {
   WeeklyStateStat,
   WeeklySummary,
 } from "@/lib/supabase/types";
-import type { CampaignFill, WeeklyRawData } from "./fetch";
-
-/** Nets a closed campaign's fills to a realized $ P&L (commission-inclusive). Null if any fill lacks a price. */
-function computeCampaignRealizedPnl(fills: CampaignFill[]): number | null {
-  if (fills.length === 0) return null;
-  let cash = 0;
-  for (const f of fills) {
-    if (f.price === null) return null;
-    cash += f.side === "SELL" ? f.price * f.quantity : -f.price * f.quantity;
-    cash += f.commission ?? 0;
-  }
-  return cash;
-}
+import type { WeeklyRawData } from "./fetch";
 
 function avg(values: number[]): number | null {
   return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;

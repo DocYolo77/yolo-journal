@@ -34,6 +34,7 @@ import {
   type OpenCampaignState,
   type ReconcileFill,
 } from "@/lib/campaigns/reconcile";
+import { fetchFillsForCampaigns, sumClosedCampaignRealizedPnl } from "@/lib/campaigns/realized-pnl";
 
 type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
 
@@ -382,8 +383,9 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
     }
   }
 
-  // Shadowlist auto-override for today's locked commitment, if any — a
-  // no-op (not a failure) when nothing is locked yet today.
+  // Shadowlist auto-override + MTD auto-computation for today's locked
+  // commitment, if any — a no-op (not a failure) when nothing is locked
+  // yet today.
   try {
     const tradeDate = getCurrentTradeDateET();
     const commitmentResult = await getLatestCommitmentForDate(tradeDate);
@@ -391,6 +393,12 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
       const shadowlistResult = await getOrCreateShadowlistDecisions(commitmentResult.data);
       if (!shadowlistResult.data) {
         notes.push(`Shadowlist-Abgleich fehlgeschlagen: ${shadowlistResult.error}`);
+        hadPartialIssue = true;
+      }
+
+      const mtdError = await syncMtdAutoFreshEntryPct(supabase, commitmentResult.data.id, tradeDate);
+      if (mtdError) {
+        notes.push(mtdError);
         hadPartialIssue = true;
       }
     }
@@ -422,4 +430,75 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
     notes,
     error: null,
   };
+}
+
+/**
+ * Computes "MTD % — nur neue Entries" (commitment section 3) from real
+ * closed campaigns opened this calendar month, and writes it onto
+ * today's LOCKED commitment. mtd_auto_fresh_entry_realized_pct has
+ * existed in the schema/form since early in this build but never had a
+ * writer anywhere in the codebase — this is that writer, mirroring the
+ * shadowlist auto-override pattern above (runs on every sync, so the
+ * locked commitment reflects the latest fills immediately).
+ *
+ * Baseline is the most recent broker_account_snapshots NLV strictly
+ * before the 1st of the month; without a baseline this is a no-op (not
+ * an error) — nothing to divide by yet, not worth a guess.
+ */
+async function syncMtdAutoFreshEntryPct(
+  supabase: SupabaseAdminClient,
+  commitmentId: string,
+  tradeDate: string
+): Promise<string | null> {
+  const monthStart = `${tradeDate.slice(0, 7)}-01`;
+
+  const { data: campaigns, error: campaignsError } = await supabase
+    .from("campaigns")
+    .select("id, status")
+    .gte("trade_date", monthStart)
+    .lte("trade_date", tradeDate);
+
+  if (campaignsError) {
+    return `MTD-Berechnung fehlgeschlagen: ${campaignsError.message}`;
+  }
+
+  const monthCampaigns = (campaigns ?? []) as { id: string; status: string }[];
+  const fillsByCampaignId = await fetchFillsForCampaigns(
+    supabase,
+    monthCampaigns.map((c) => ({ id: c.id }))
+  );
+  const realizedPnl = sumClosedCampaignRealizedPnl(monthCampaigns, fillsByCampaignId);
+
+  const { data: baselineRow, error: baselineError } = await supabase
+    .from("broker_account_snapshots")
+    .select("net_liquidation_value")
+    .lt("trading_date", monthStart)
+    .order("trading_date", { ascending: false })
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (baselineError) {
+    return `MTD-Berechnung fehlgeschlagen: ${baselineError.message}`;
+  }
+
+  const baselineNlv = (baselineRow?.net_liquidation_value as number | null) ?? null;
+  if (!baselineNlv) {
+    // No snapshot before this month yet (e.g. sync only started this
+    // month) — genuinely not computable, not a failure.
+    return null;
+  }
+
+  const pct = Math.round((realizedPnl / baselineNlv) * 100 * 100) / 100;
+
+  const { error: updateError } = await supabase
+    .from("commitments")
+    .update({ mtd_auto_fresh_entry_realized_pct: pct })
+    .eq("id", commitmentId);
+
+  if (updateError) {
+    return `MTD-Wert konnte nicht gespeichert werden: ${updateError.message}`;
+  }
+
+  return null;
 }
