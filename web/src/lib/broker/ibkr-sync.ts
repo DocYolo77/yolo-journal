@@ -339,7 +339,14 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
   const notes: string[] = [];
   let hadPartialIssue = false;
 
-  const [executionsResult, accountResult] = await Promise.all([syncExecutions(supabase), syncAccountAndPositions(supabase)]);
+  // Sequential, not Promise.all: both calls hit fetchFlexStatementXml
+  // under the same IBKR_FLEX_TOKEN, and IBKR's Flex Web Service throttles
+  // near-simultaneous requests from one token with error 1018 ("Too many
+  // requests have been made from this token") — firing Trades and
+  // Activity at once reliably reproduced this and silently dropped the
+  // executions half of the sync.
+  const executionsResult = await syncExecutions(supabase);
+  const accountResult = await syncAccountAndPositions(supabase);
 
   if (executionsResult.error && accountResult.error) {
     return {
