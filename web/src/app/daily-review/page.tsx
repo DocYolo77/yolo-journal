@@ -3,9 +3,15 @@ import { PageHeader } from "@/components/layout/page-header";
 import { DailyReviewForm } from "@/components/daily-review/daily-review-form";
 import { FinalizeReviewButton } from "@/components/daily-review/finalize-review-button";
 import { getDailyReviewContext } from "@/lib/data/daily-review";
-import { getReportSnapshot } from "@/lib/data/report-snapshot";
+import {
+  getCampaignsForReview,
+  getReportSnapshot,
+  getTickerChartDataForReview,
+} from "@/lib/data/report-snapshot";
 import { getDailyPnlSnapshotForDate, getLatestPortfolioPositions } from "@/lib/data/portfolio";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
+import { renderDailyChartSvg, renderIntradayChartSvg } from "@/lib/charts/svg-chart";
+import type { TickerChartSvgPair } from "@/components/daily-review/daily-review-form";
 import { finalizeDailyReviewAction, saveDailyReviewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -36,11 +42,12 @@ export default async function DailyReviewPage({
     </div>
   );
 
-  const [contextResult, snapshotResult, portfolioResult, dailyPnlResult] = await Promise.all([
+  const [contextResult, snapshotResult, portfolioResult, dailyPnlResult, campaigns] = await Promise.all([
     getDailyReviewContext(tradeDate),
     getReportSnapshot(tradeDate),
     getLatestPortfolioPositions(),
     getDailyPnlSnapshotForDate(tradeDate),
+    getCampaignsForReview(tradeDate),
   ]);
 
   if (!contextResult.data) {
@@ -62,6 +69,37 @@ export default async function DailyReviewPage({
   const boundFinalizeAction = finalizeDailyReviewAction.bind(null, tradeDate);
 
   const isFinalized = snapshotResult.data !== null;
+
+  // Every ticker the user is plausibly about to review or has already
+  // reviewed: already-saved ticker reviews, the committed watchlist, and
+  // whatever IBKR's latest position snapshot currently holds — so a
+  // chart is ready the moment a ticker becomes relevant, not only after
+  // it's been manually added and saved once.
+  const chartTickers = isFinalized
+    ? []
+    : Array.from(
+        new Set([
+          ...(review?.ticker_reviews.map((t) => t.ticker) ?? []),
+          ...suggestedTickers,
+          ...(portfolioResult.data?.positions.map((p) => p.symbol) ?? []),
+        ])
+      );
+
+  const tickerCharts = await getTickerChartDataForReview(tradeDate, chartTickers);
+
+  const chartSvgByTicker: Record<string, TickerChartSvgPair> = {};
+  for (const chart of tickerCharts) {
+    chartSvgByTicker[chart.ticker] = {
+      dailySvg: renderDailyChartSvg(chart.ticker, chart.daily),
+      intradaySvg: renderIntradayChartSvg(
+        chart.ticker,
+        chart.intraday,
+        chart.orb_levels,
+        chart.markers,
+        chart.intraday_warmup ?? []
+      ),
+    };
+  }
 
   return (
     <div>
@@ -92,7 +130,18 @@ export default async function DailyReviewPage({
 
       {isFinalized ? null : (
         <>
+          {/* key={tradeDate}: DailyReviewForm seeds its guardrails/mental/
+              todos/ticker_reviews state (and every defaultValue-based
+              field) from `review` only once, at mount. Without a key tied
+              to the date, the Prev/Next Day Links above don't remount it —
+              React just re-renders the same instance with a new `review`
+              prop, so all that state keeps showing the previously-viewed
+              day's values instead of the newly-loaded day's. Saving in
+              that state would silently overwrite the new day's Ticker
+              Reviews/Mental/Verbesserungspunkte with stale data from the
+              day navigated away from. */}
           <DailyReviewForm
+            key={tradeDate}
             action={boundSaveAction}
             tradeDate={tradeDate}
             review={review}
@@ -100,6 +149,8 @@ export default async function DailyReviewPage({
             portfolio={portfolioResult.data?.positions ?? []}
             portfolioCapturedAt={portfolioResult.data?.capturedAt ?? null}
             dailyPnlSnapshot={dailyPnlResult.data ?? null}
+            campaigns={campaigns}
+            chartSvgByTicker={chartSvgByTicker}
           />
           {review ? (
             <div className="mt-6">

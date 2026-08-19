@@ -16,6 +16,8 @@ import {
 } from "@/lib/validation/daily-review";
 import type { TickerReview } from "@/lib/supabase/types";
 
+export type TickerChartSvgPair = { dailySvg: string; intradaySvg: string };
+
 const inputClass =
   "rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
 
@@ -90,11 +92,13 @@ export function TickerReviewEditor({
   onChange,
   suggestedTickers,
   error,
+  chartSvgByTicker,
 }: {
   value: TickerReview[];
   onChange: (rows: TickerReview[]) => void;
   suggestedTickers: string[];
   error?: string;
+  chartSvgByTicker?: Record<string, TickerChartSvgPair>;
 }) {
   const existingTickers = new Set(value.map((r) => r.ticker));
   const addableSuggestions = suggestedTickers.filter((t) => !existingTickers.has(t));
@@ -242,6 +246,12 @@ export function TickerReviewEditor({
                 onChange={(v) => updateRow(index, { notes: v })}
               />
             </div>
+            {chartSvgByTicker?.[row.ticker] ? (
+              <div className="mt-3 space-y-3">
+                <ChartSvg svg={chartSvgByTicker[row.ticker].dailySvg} />
+                <ChartSvg svg={chartSvgByTicker[row.ticker].intradaySvg} />
+              </div>
+            ) : null}
           </div>
         ))}
         {value.length === 0 ? (
@@ -286,5 +296,17 @@ function ManualTickerAdd({ onAdd }: { onAdd: (ticker: string) => void }) {
         + hinzufügen
       </button>
     </div>
+  );
+}
+
+function ChartSvg({ svg }: { svg: string }) {
+  return (
+    <div
+      className="overflow-x-auto rounded-md border border-border"
+      // Server-rendered by page.tsx via the same lib/charts/svg-chart.ts
+      // functions the finalized report/PDF use — no user-controlled HTML
+      // ever flows through here.
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 }

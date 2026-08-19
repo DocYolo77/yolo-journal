@@ -2,8 +2,14 @@
 
 import { useActionState, useState, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
-import { TickerReviewEditor } from "./ticker-review-editor";
-import type { DailyReviewRow, GuardrailEntry, MentalStatus, TickerReview } from "@/lib/supabase/types";
+import { TickerReviewEditor, type TickerChartSvgPair } from "./ticker-review-editor";
+import type {
+  DailyReportCampaign,
+  DailyReviewRow,
+  GuardrailEntry,
+  MentalStatus,
+  TickerReview,
+} from "@/lib/supabase/types";
 import type { DailyPnlSnapshot, PortfolioPosition } from "@/lib/data/portfolio";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import {
@@ -14,6 +20,8 @@ import {
   emptyDailyReviewFormState,
   type DailyReviewFormState,
 } from "@/lib/validation/daily-review";
+
+export type { TickerChartSvgPair };
 
 const inputClass =
   "rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none";
@@ -50,6 +58,8 @@ export function DailyReviewForm({
   portfolio,
   portfolioCapturedAt,
   dailyPnlSnapshot,
+  campaigns,
+  chartSvgByTicker,
 }: {
   action: (state: DailyReviewFormState, formData: FormData) => Promise<DailyReviewFormState>;
   tradeDate: string;
@@ -58,6 +68,8 @@ export function DailyReviewForm({
   portfolio: PortfolioPosition[];
   portfolioCapturedAt: string | null;
   dailyPnlSnapshot: DailyPnlSnapshot | null;
+  campaigns: DailyReportCampaign[];
+  chartSvgByTicker: Record<string, TickerChartSvgPair>;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
 
@@ -231,12 +243,50 @@ export function DailyReviewForm({
         )}
       </Section>
 
+      <Section title="Campaigns heute (IBKR)">
+        {campaigns.length > 0 ? (
+          <div className="space-y-4">
+            {campaigns.map((c) => {
+              const entryFill = c.fills[0];
+              const exitFill = c.status === "closed" && c.fills.length > 1 ? c.fills[c.fills.length - 1] : null;
+              return (
+                <div key={c.id} className="rounded-md border border-border p-3 text-sm">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-foreground">{c.symbol}</span>
+                    <span className="text-xs text-muted-foreground">{c.direction ?? "–"}</span>
+                    <span className="text-xs text-muted-foreground">{c.status === "closed" ? "geschlossen" : "offen"}</span>
+                    {c.realized_pnl != null ? (
+                      <span className={c.realized_pnl >= 0 ? "text-xs text-positive" : "text-xs text-negative"}>
+                        Realized {formatCurrency(c.realized_pnl)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                    <span className="text-muted-foreground">
+                      Entry: {entryFill ? `${formatCurrency(entryFill.price)} × ${entryFill.quantity} — ${formatDateTime(entryFill.executed_at)}` : "–"}
+                    </span>
+                    {exitFill ? (
+                      <span className="text-muted-foreground">
+                        Close: {`${formatCurrency(exitFill.price)} × ${exitFill.quantity} — ${formatDateTime(exitFill.executed_at)}`}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Keine Campaigns für diesen Tag synchronisiert.</p>
+        )}
+      </Section>
+
       <Section title="Ticker Reviews">
         <TickerReviewEditor
           value={tickerReviews}
           onChange={setTickerReviews}
           suggestedTickers={suggestedTickers}
           error={errors.tickerReviews}
+          chartSvgByTicker={chartSvgByTicker}
         />
       </Section>
 

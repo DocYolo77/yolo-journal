@@ -112,6 +112,54 @@ async function getMarkersForTicker(
   return classifyExecutions(validExecutions);
 }
 
+/**
+ * Daily + intraday (with warmup) + entry/exit markers + ORB levels for
+ * each ticker — the reusable per-ticker chart bundle shared by the
+ * finalized report (assembleMarketData below) and the live, still-
+ * editable Daily Review page (getTickerChartDataForReview), so both show
+ * the exact same chart data/markers for a given ticker/date.
+ */
+async function assembleTickerChartData(
+  supabase: SupabaseAdminClient,
+  tradeDate: string,
+  tickers: string[]
+): Promise<TickerChartData[]> {
+  return Promise.all(
+    tickers.map(async (ticker) => {
+      const [daily, intraday, intradayWarmup, markers] = await Promise.all([
+        getDailyChartSeries(ticker, tradeDate),
+        getIntradayChartSeries(ticker, tradeDate),
+        getIntradayWarmupBars(ticker, tradeDate),
+        getMarkersForTicker(supabase, tradeDate, ticker),
+      ]);
+      return {
+        ticker,
+        daily,
+        intraday,
+        intraday_warmup: intradayWarmup,
+        markers,
+        orb_levels: computeOrbLevelsFromIntraday(intraday),
+      };
+    })
+  );
+}
+
+/**
+ * Daily + intraday charts with entry/exit markers for a ticker set, for
+ * the live (not-yet-finalized) Daily Review page's Ticker Review section
+ * — best-effort, never blocks the page if Massive is unreachable.
+ */
+export async function getTickerChartDataForReview(tradeDate: string, tickers: string[]): Promise<TickerChartData[]> {
+  if (tickers.length === 0) return [];
+  try {
+    const supabase = getSupabaseAdmin();
+    return await assembleTickerChartData(supabase, tradeDate, tickers);
+  } catch (e) {
+    console.error("getTickerChartDataForReview failed", e);
+    return [];
+  }
+}
+
 async function assembleMarketData(
   supabase: SupabaseAdminClient,
   tradeDate: string,
@@ -125,24 +173,7 @@ async function assembleMarketData(
       }))
     );
 
-    const tickerData: TickerChartData[] = await Promise.all(
-      tickers.map(async (ticker) => {
-        const [daily, intraday, intradayWarmup, markers] = await Promise.all([
-          getDailyChartSeries(ticker, tradeDate),
-          getIntradayChartSeries(ticker, tradeDate),
-          getIntradayWarmupBars(ticker, tradeDate),
-          getMarkersForTicker(supabase, tradeDate, ticker),
-        ]);
-        return {
-          ticker,
-          daily,
-          intraday,
-          intraday_warmup: intradayWarmup,
-          markers,
-          orb_levels: computeOrbLevelsFromIntraday(intraday),
-        };
-      })
-    );
+    const tickerData = await assembleTickerChartData(supabase, tradeDate, tickers);
 
     return { index_context: indexContext, tickers: tickerData, fetch_error: null };
   } catch (e) {
@@ -197,6 +228,22 @@ async function assembleCampaignData(
       })),
     };
   });
+}
+
+/**
+ * Today's economic campaigns (entry price/time/quantity, and exit
+ * price/time if the position was closed same day) for the live, not-yet-
+ * finalized Daily Review page — same data assembleCampaignData produces
+ * for the finalized report, just callable before finalization exists.
+ */
+export async function getCampaignsForReview(tradeDate: string): Promise<DailyReportCampaign[]> {
+  try {
+    const supabase = getSupabaseAdmin();
+    return await assembleCampaignData(supabase, tradeDate);
+  } catch (e) {
+    console.error("getCampaignsForReview failed", e);
+    return [];
+  }
 }
 
 /**
