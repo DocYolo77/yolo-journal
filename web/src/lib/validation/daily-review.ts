@@ -78,6 +78,7 @@ export const CANONICAL_GUARDRAILS: { id: string; label: string }[] = [
   { id: "mtd_pause", label: "MTD-Pausenregel eingehalten" },
   { id: "no_impulsive_adds", label: "Keine impulsiven Adds" },
   { id: "committed_triggers_only", label: "Keine nicht committed Trigger gehandelt" },
+  { id: "social_media_influence", label: "Social Media Einfluss an dem Tag?" },
 ];
 
 export type DailyReviewInput = {
