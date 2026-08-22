@@ -2,6 +2,7 @@ import type {
   DailyReviewType,
   GuardrailEntry,
   GuardrailStatus,
+  ManualPortfolioPosition,
   MentalStatus,
   TickerReview,
 } from "@/lib/supabase/types";
@@ -86,6 +87,8 @@ export type DailyReviewInput = {
   daily_pnl: number | null;
   market_thought: string | null;
   market_environment: string | null;
+  portfolio_comment: string | null;
+  manual_portfolio_positions: ManualPortfolioPosition[];
   guardrails: GuardrailEntry[];
   guardrails_reviewed: boolean;
   mental: MentalStatus;
@@ -98,6 +101,21 @@ export type DailyReviewInput = {
   shadowlist_comment: string | null;
   ticker_reviews: TickerReview[];
 };
+
+/** Normalizes a manual portfolio position row loaded from the client's JSON hidden input. */
+export function normalizeManualPortfolioPosition(
+  row: Partial<ManualPortfolioPosition> & Record<string, unknown>
+): ManualPortfolioPosition {
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    symbol: (row.symbol ?? "").toString().trim().toUpperCase(),
+    quantity: typeof row.quantity === "number" && Number.isFinite(row.quantity) ? row.quantity : 0,
+    average_price: num(row.average_price),
+    market_price: num(row.market_price),
+    unrealized_pnl: num(row.unrealized_pnl),
+    currency: row.currency ? row.currency.toString().trim().toUpperCase() : null,
+  };
+}
 
 /**
  * Normalizes a ticker review row loaded from storage or the client into
@@ -193,6 +211,16 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
 
   const marketThought = readString(formData, "marketThought");
   const marketEnvironment = readString(formData, "marketEnvironment");
+  const portfolioComment = readString(formData, "portfolioComment");
+
+  const rawManualPortfolio = parseJson<(Partial<ManualPortfolioPosition> & Record<string, unknown>)[]>(
+    formData,
+    "manualPortfolioPositionsJson",
+    []
+  );
+  const manualPortfolioPositions = rawManualPortfolio
+    .map((row) => normalizeManualPortfolioPosition(row))
+    .filter((row) => row.symbol);
 
   const rawGuardrails = parseJson<GuardrailEntry[]>(formData, "guardrailsJson", []);
   const guardrailsById = new Map(rawGuardrails.map((g) => [g.guardrail_id, g]));
@@ -271,6 +299,8 @@ export function parseDailyReviewForm(formData: FormData): ValidationResult {
       daily_pnl: dailyPnl,
       market_thought: marketThought || null,
       market_environment: marketEnvironment || null,
+      portfolio_comment: portfolioComment || null,
+      manual_portfolio_positions: manualPortfolioPositions,
       guardrails,
       guardrails_reviewed: guardrailsReviewed,
       mental,

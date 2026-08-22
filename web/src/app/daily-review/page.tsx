@@ -12,7 +12,7 @@ import { getDailyPnlSnapshotForDate, getLatestPortfolioPositions } from "@/lib/d
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
 import { renderDailyChartSvg, renderIntradayChartSvg } from "@/lib/charts/svg-chart";
 import type { TickerChartSvgPair } from "@/components/daily-review/daily-review-form";
-import { finalizeDailyReviewAction, saveDailyReviewAction } from "./actions";
+import { finalizeDailyReviewAction, generateCoachingTakeAction, saveDailyReviewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +67,7 @@ export default async function DailyReviewPage({
   const suggestedTickers = commitment?.watchlist.map((w) => w.ticker) ?? [];
   const boundSaveAction = saveDailyReviewAction.bind(null, tradeDate);
   const boundFinalizeAction = finalizeDailyReviewAction.bind(null, tradeDate);
+  const boundGenerateCoachTakeAction = generateCoachingTakeAction.bind(null, tradeDate);
 
   const isFinalized = snapshotResult.data !== null;
 
@@ -143,6 +144,7 @@ export default async function DailyReviewPage({
           <DailyReviewForm
             key={tradeDate}
             action={boundSaveAction}
+            generateCoachTakeAction={boundGenerateCoachTakeAction}
             tradeDate={tradeDate}
             review={review}
             suggestedTickers={suggestedTickers}

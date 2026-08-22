@@ -70,6 +70,7 @@ export function DailyReportPdfDocument({
   const campaigns = snapshot.campaigns ?? [];
   const portfolioPositions = snapshot.portfolio_snapshot?.positions ?? [];
   const portfolioCapturedAt = snapshot.portfolio_snapshot?.captured_at ?? null;
+  const portfolioIsManual = snapshot.portfolio_snapshot?.source === "manual";
 
   return (
     <Document>
@@ -128,10 +129,12 @@ export function DailyReportPdfDocument({
           )}
         </Section>
 
-        <Section title="Portfolio-Snapshot (IBKR, inkl. Altpositionen)">
+        <Section title={portfolioIsManual ? "Portfolio-Snapshot (manuell erfasst)" : "Portfolio-Snapshot (IBKR, inkl. Altpositionen)"}>
           {portfolioPositions.length > 0 ? (
             <>
-              <Text style={styles.label}>Stand {fmtDT(portfolioCapturedAt)}</Text>
+              <Text style={styles.label}>
+                {portfolioIsManual ? "Manuell erfasst — IBKR-Sync nicht übernommen" : `Stand ${fmtDT(portfolioCapturedAt)}`}
+              </Text>
               <View style={styles.tableHeader}>
                 <Text style={styles.cellLabel}>Ticker</Text>
                 <Text style={styles.cellLabel}>Menge</Text>

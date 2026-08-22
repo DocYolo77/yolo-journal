@@ -41,6 +41,7 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
   const campaigns = snapshot.campaigns ?? [];
   const portfolioPositions = snapshot.portfolio_snapshot?.positions ?? [];
   const portfolioCapturedAt = snapshot.portfolio_snapshot?.captured_at ?? null;
+  const portfolioIsManual = snapshot.portfolio_snapshot?.source === "manual";
 
   return (
     <div className="space-y-6">
@@ -131,10 +132,14 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
         )}
       </Section>
 
-      <Section title="Portfolio-Snapshot (IBKR, inkl. Altpositionen)">
+      <Section title={portfolioIsManual ? "Portfolio-Snapshot (manuell erfasst)" : "Portfolio-Snapshot (IBKR, inkl. Altpositionen)"}>
         {portfolioPositions.length > 0 ? (
           <>
-            {portfolioCapturedAt ? (
+            {portfolioIsManual ? (
+              <p className="mb-2 text-xs text-accent">
+                Manuell erfasst — der IBKR-Sync wurde für diesen Tag nicht übernommen.
+              </p>
+            ) : portfolioCapturedAt ? (
               <p className="mb-2 text-xs text-muted-foreground">Stand {formatDateTime(portfolioCapturedAt)}</p>
             ) : null}
             <table className="w-full text-left text-sm">

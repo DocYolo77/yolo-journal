@@ -353,8 +353,11 @@ export async function finalizeDailyReview(
     }
 
     // Best-effort — same as the broker account snapshot above, never
-    // blocks finalization if IBKR positions haven't synced.
-    const portfolioSnapshot = await getPortfolioSnapshotForDate(tradeDate);
+    // blocks finalization if IBKR positions haven't synced. A non-empty
+    // manual_portfolio_positions override always wins over the IBKR sync
+    // — the user only fills that in when the sync is known to be wrong.
+    const hasManualOverride = review.manual_portfolio_positions.length > 0;
+    const portfolioSnapshot = hasManualOverride ? null : await getPortfolioSnapshotForDate(tradeDate);
 
     const snapshot: DailyReportSnapshotData = {
       report_schema_version: 1,
@@ -366,10 +369,9 @@ export async function finalizeDailyReview(
       broker_account_snapshot: brokerRow ?? null,
       market_data: marketData,
       campaigns,
-      portfolio_snapshot: {
-        captured_at: portfolioSnapshot.capturedAt,
-        positions: portfolioSnapshot.positions,
-      },
+      portfolio_snapshot: hasManualOverride
+        ? { captured_at: null, positions: review.manual_portfolio_positions, source: "manual" }
+        : { captured_at: portfolioSnapshot!.capturedAt, positions: portfolioSnapshot!.positions, source: "ibkr_sync" },
     };
 
     const { data: inserted, error: insertError } = await supabase

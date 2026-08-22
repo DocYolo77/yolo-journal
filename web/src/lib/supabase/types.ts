@@ -186,6 +186,22 @@ export type TickerReview = {
 export type DailyReviewStatus = "DRAFT" | "COMPLETED";
 export type DailyReviewType = "ENTRY" | "MANAGEMENT";
 
+/**
+ * Same shape as lib/data/portfolio.ts's PortfolioPosition (the
+ * broker_positions_snapshots read model) — defined separately here since
+ * supabase/types.ts is the canonical hand-written schema mirror and the
+ * data layer imports from it, not the other way around. Structurally
+ * identical, so values flow between the two without casts.
+ */
+export type ManualPortfolioPosition = {
+  symbol: string;
+  quantity: number;
+  average_price: number | null;
+  market_price: number | null;
+  unrealized_pnl: number | null;
+  currency: string | null;
+};
+
 export type DailyReviewRow = {
   id: string;
   user_id: string | null;
@@ -202,6 +218,15 @@ export type DailyReviewRow = {
 
   market_thought: string | null;
   market_environment: string | null;
+  /** "Portfolio / Neue Positionen" — commentary on the portfolio, partials, stops. */
+  portfolio_comment: string | null;
+  /**
+   * Manual override for the Portfolio position table when the automatic
+   * IBKR sync doesn't reflect the real portfolio correctly. Empty by
+   * default — the auto-synced broker_positions_snapshots data is shown
+   * unless the user has explicitly entered rows here.
+   */
+  manual_portfolio_positions: ManualPortfolioPosition[];
 
   guardrails: GuardrailEntry[];
   guardrails_reviewed: boolean;
@@ -364,6 +389,13 @@ export type DailyReportPortfolioPosition = {
 export type DailyReportPortfolioSnapshot = {
   captured_at: string | null;
   positions: DailyReportPortfolioPosition[];
+  /**
+   * "manual" when the user's manual_portfolio_positions override was
+   * non-empty at finalization time (IBKR sync doesn't always reflect the
+   * real portfolio correctly) — always label which one the report/PDF is
+   * actually showing instead of silently implying it's the IBKR sync.
+   */
+  source: "ibkr_sync" | "manual";
 };
 
 export type DailyReportSnapshotData = {

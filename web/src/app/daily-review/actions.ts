@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { appendAuditEvent } from "@/lib/audit";
-import { upsertDailyReview } from "@/lib/data/daily-review";
-import { finalizeDailyReview, hasReportSnapshot } from "@/lib/data/report-snapshot";
+import { getDailyReviewContext, upsertDailyReview } from "@/lib/data/daily-review";
+import { finalizeDailyReview, getCampaignsForReview, hasReportSnapshot } from "@/lib/data/report-snapshot";
+import { generateCoachSummary } from "@/lib/coach/generate-summary";
 import { parseDailyReviewForm, type DailyReviewFormState } from "@/lib/validation/daily-review";
 
 export async function saveDailyReviewAction(
@@ -46,6 +47,50 @@ export async function saveDailyReviewAction(
   revalidatePath("/archive");
 
   return { fieldErrors: {}, success: true };
+}
+
+export type GenerateCoachTakeState = { suggestion: string | null; error: string | null };
+
+/**
+ * "KI-Fazit generieren" — a single Anthropic Messages API call (see
+ * lib/coach/generate-summary.ts) over whatever is currently in the form
+ * (including unsaved edits, via parseDailyReviewForm on the live
+ * formData) plus the locked commitment and today's campaigns. Only
+ * returns a suggestion for the client to drop into the Coaching Take
+ * field — never writes to the DB itself, so the user always reviews/
+ * edits before the normal "Speichern" actually persists it.
+ */
+export async function generateCoachingTakeAction(
+  tradeDate: string,
+  _prevState: GenerateCoachTakeState,
+  formData: FormData
+): Promise<GenerateCoachTakeState> {
+  const parsed = parseDailyReviewForm(formData);
+  if (!parsed.success) {
+    return { suggestion: null, error: "Formular enthält Fehler — bitte zuerst korrigieren." };
+  }
+
+  const [contextResult, campaigns] = await Promise.all([
+    getDailyReviewContext(tradeDate),
+    getCampaignsForReview(tradeDate),
+  ]);
+
+  if (!contextResult.data) {
+    return { suggestion: null, error: contextResult.error };
+  }
+
+  const result = await generateCoachSummary({
+    tradeDate,
+    review: parsed.data,
+    commitment: contextResult.data.commitment,
+    campaigns,
+  });
+
+  if (!result.text) {
+    return { suggestion: null, error: result.error };
+  }
+
+  return { suggestion: result.text, error: null };
 }
 
 export type FinalizeReviewState = { error: string | null };

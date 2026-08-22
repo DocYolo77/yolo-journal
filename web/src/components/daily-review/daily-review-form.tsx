@@ -3,15 +3,18 @@
 import { useActionState, useState, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
 import { TickerReviewEditor, type TickerChartSvgPair } from "./ticker-review-editor";
+import { ManualPortfolioEditor } from "./manual-portfolio-editor";
 import type {
   DailyReportCampaign,
   DailyReviewRow,
   GuardrailEntry,
+  ManualPortfolioPosition,
   MentalStatus,
   TickerReview,
 } from "@/lib/supabase/types";
 import type { DailyPnlSnapshot, PortfolioPosition } from "@/lib/data/portfolio";
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
+import type { GenerateCoachTakeState } from "@/app/daily-review/actions";
 import {
   CANONICAL_GUARDRAILS,
   GUARDRAIL_STATUSES,
@@ -52,6 +55,7 @@ function defaultMental(existing: MentalStatus | undefined): MentalStatus {
 
 export function DailyReviewForm({
   action,
+  generateCoachTakeAction,
   tradeDate,
   review,
   suggestedTickers,
@@ -62,6 +66,7 @@ export function DailyReviewForm({
   chartSvgByTicker,
 }: {
   action: (state: DailyReviewFormState, formData: FormData) => Promise<DailyReviewFormState>;
+  generateCoachTakeAction: (state: GenerateCoachTakeState, formData: FormData) => Promise<GenerateCoachTakeState>;
   tradeDate: string;
   review: DailyReviewRow | null;
   suggestedTickers: string[];
@@ -72,6 +77,10 @@ export function DailyReviewForm({
   chartSvgByTicker: Record<string, TickerChartSvgPair>;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
+  const [generateState, generateFormAction, generatePending] = useActionState(generateCoachTakeAction, {
+    suggestion: null,
+    error: null,
+  });
 
   const [guardrails, setGuardrails] = useState<GuardrailEntry[]>(() => defaultGuardrails(review?.guardrails));
   const [guardrailsReviewed, setGuardrailsReviewed] = useState(review?.guardrails_reviewed ?? false);
@@ -79,6 +88,20 @@ export function DailyReviewForm({
   const [todos, setTodos] = useState<string[]>(() => review?.operational_todos ?? []);
   const [newTodo, setNewTodo] = useState("");
   const [tickerReviews, setTickerReviews] = useState<TickerReview[]>(() => review?.ticker_reviews ?? []);
+  const [manualPortfolio, setManualPortfolio] = useState<ManualPortfolioPosition[]>(
+    () => review?.manual_portfolio_positions ?? []
+  );
+  const [coachingTake, setCoachingTake] = useState(review?.coaching_take ?? "");
+  // Adjusting state in response to a prop/action-result change, done
+  // during render per React's guidance rather than in a useEffect (which
+  // would cause an extra render pass) — see "Adjusting state when a prop
+  // changes" in the React docs. Guarded by prevSuggestion so this only
+  // fires once per distinct generation result, never on every render.
+  const [prevSuggestion, setPrevSuggestion] = useState(generateState.suggestion);
+  if (generateState.suggestion !== prevSuggestion) {
+    setPrevSuggestion(generateState.suggestion);
+    if (generateState.suggestion) setCoachingTake(generateState.suggestion);
+  }
 
   const errors = state.fieldErrors;
 
@@ -114,6 +137,7 @@ export function DailyReviewForm({
       <input type="hidden" name="mentalJson" value={JSON.stringify(mental)} readOnly />
       <input type="hidden" name="operationalTodosJson" value={JSON.stringify(todos)} readOnly />
       <input type="hidden" name="tickerReviewsJson" value={JSON.stringify(tickerReviews)} readOnly />
+      <input type="hidden" name="manualPortfolioPositionsJson" value={JSON.stringify(manualPortfolio)} readOnly />
 
       <Section title="Tagesdaten">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -183,13 +207,21 @@ export function DailyReviewForm({
         ) : null}
         <FieldTextarea
           name="marketThought"
-          label="Sessionverlauf und Marktgedanke"
+          label="Sessionverlauf"
+          placeholder="Welche Aktionen habe ich in der Session unternommen, was passierte mit mir, welche Trades genommen, freie Zusammenfassung der Session"
           defaultValue={review?.market_thought ?? ""}
         />
         <FieldTextarea
           name="marketEnvironment"
           label="Marktumgebung"
+          placeholder="Indices, extended, bullish, bearish, chop, Leader? Themes?"
           defaultValue={review?.market_environment ?? ""}
+        />
+        <FieldTextarea
+          name="portfolioComment"
+          label="Portfolio / Neue Positionen"
+          placeholder="Kommentar zum Portfolio, Partials, Stops, falls gewünscht"
+          defaultValue={review?.portfolio_comment ?? ""}
         />
       </Section>
 
@@ -241,6 +273,20 @@ export function DailyReviewForm({
             Noch kein Portfolio synchronisiert — siehe &bdquo;Sync IBKR now&rdquo; auf der Shadowlist-Seite.
           </p>
         )}
+      </Section>
+
+      <Section title="Portfolio-Korrektur (manuell)">
+        <p className="text-xs text-muted-foreground">
+          Falls der IBKR-Sync das Portfolio nicht korrekt abbildet: hier manuell erfassen. Sobald
+          mindestens eine Zeile existiert, wird sie statt der IBKR-Sync-Werte im finalisierten Report
+          und PDF angezeigt.
+        </p>
+        {manualPortfolio.length > 0 ? (
+          <p className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+            Manuelle Korrektur aktiv — überschreibt die IBKR-Sync-Werte für diesen Tag.
+          </p>
+        ) : null}
+        <ManualPortfolioEditor value={manualPortfolio} onChange={setManualPortfolio} />
       </Section>
 
       <Section title="Campaigns heute (IBKR)">
@@ -403,7 +449,30 @@ export function DailyReviewForm({
       <Section title="Abschluss">
         <FieldTextarea name="positive" label="Positive" defaultValue={review?.positive ?? ""} />
         <FieldTextarea name="weakness" label="Weakness" defaultValue={review?.weakness ?? ""} />
-        <FieldTextarea name="coachingTake" label="Coaching Take" defaultValue={review?.coaching_take ?? ""} />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="coachingTake" className="text-sm font-medium text-foreground">
+              Coaching Take
+            </label>
+            <button
+              type="submit"
+              formAction={generateFormAction}
+              disabled={generatePending}
+              className="rounded-md border border-accent/50 px-2.5 py-1 text-xs text-accent transition-colors hover:bg-accent/10 disabled:opacity-60"
+            >
+              {generatePending ? "Generiere…" : "KI-Fazit generieren"}
+            </button>
+          </div>
+          <textarea
+            id="coachingTake"
+            name="coachingTake"
+            value={coachingTake}
+            onChange={(e) => setCoachingTake(e.target.value)}
+            rows={4}
+            className={inputClass}
+          />
+          {generateState.error ? <p className="text-xs text-negative">{generateState.error}</p> : null}
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldText name="selfGrade" label="Self Grade" defaultValue={review?.self_grade ?? ""} />
           <FieldText name="gradeReason" label="Grade Reason" defaultValue={review?.grade_reason ?? ""} />
