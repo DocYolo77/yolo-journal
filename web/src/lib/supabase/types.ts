@@ -669,6 +669,26 @@ export type WeeklyReportSnapshotData = {
   };
 };
 
+// 20260824000000_create_lessons_learned_entries.sql
+
+export type LessonsLearnedKind = "lesson" | "quote" | "deep_dive";
+
+export type LessonsLearnedEntryRow = {
+  id: string;
+  user_id: string | null;
+  kind: LessonsLearnedKind;
+  /** Deep Dives only — the collapsed-state title. Null for lesson/quote. */
+  title: string | null;
+  /** lesson/quote: the short text itself. deep_dive: the long expanded body. */
+  content: string;
+  /** Deep Dives only — optional link to the original tweet/video/article. */
+  source_url: string | null;
+  /** Free up/down reordering, scoped per kind. */
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WeeklyReportSnapshotRow = {
   id: string;
   user_id: string | null;
