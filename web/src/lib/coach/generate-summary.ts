@@ -106,6 +106,11 @@ export async function generateCoachSummary(params: {
     const response = await client.messages.create({
       model: "claude-opus-5",
       max_tokens: 1024,
+      // Plain text synthesis over already-structured data, not complex
+      // reasoning — low effort keeps this fast (avoids Vercel serverless
+      // function timeouts blowing up the request) without sacrificing
+      // quality for a task this straightforward.
+      output_config: { effort: "low" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildPrompt(params) }],
     });

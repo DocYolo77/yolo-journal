@@ -15,6 +15,11 @@ import type { TickerChartSvgPair } from "@/components/daily-review/daily-review-
 import { finalizeDailyReviewAction, generateCoachingTakeAction, saveDailyReviewAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+// Headroom for the "KI-Fazit generieren" Server Action (Anthropic
+// Messages API call) — the platform default (10s on Hobby) can be tight
+// under real network latency. Actual plan ceiling still applies; this
+// just requests the maximum this route is allowed to use.
+export const maxDuration = 60;
 
 export default async function DailyReviewPage({
   searchParams,

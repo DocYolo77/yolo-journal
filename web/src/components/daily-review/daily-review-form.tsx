@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 import { FieldNumber, FieldSelect, FieldText, FieldTextarea } from "@/components/ui/form-fields";
 import { TickerReviewEditor, type TickerChartSvgPair } from "./ticker-review-editor";
 import { ManualPortfolioEditor } from "./manual-portfolio-editor";
@@ -66,7 +66,7 @@ export function DailyReviewForm({
   chartSvgByTicker,
 }: {
   action: (state: DailyReviewFormState, formData: FormData) => Promise<DailyReviewFormState>;
-  generateCoachTakeAction: (state: GenerateCoachTakeState, formData: FormData) => Promise<GenerateCoachTakeState>;
+  generateCoachTakeAction: (formData: FormData) => Promise<GenerateCoachTakeState>;
   tradeDate: string;
   review: DailyReviewRow | null;
   suggestedTickers: string[];
@@ -77,10 +77,9 @@ export function DailyReviewForm({
   chartSvgByTicker: Record<string, TickerChartSvgPair>;
 }) {
   const [state, formAction, pending] = useActionState(action, emptyDailyReviewFormState);
-  const [generateState, generateFormAction, generatePending] = useActionState(generateCoachTakeAction, {
-    suggestion: null,
-    error: null,
-  });
+  const formRef = useRef<HTMLFormElement>(null);
+  const [generatePending, setGeneratePending] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const [guardrails, setGuardrails] = useState<GuardrailEntry[]>(() => defaultGuardrails(review?.guardrails));
   const [guardrailsReviewed, setGuardrailsReviewed] = useState(review?.guardrails_reviewed ?? false);
@@ -92,16 +91,6 @@ export function DailyReviewForm({
     () => review?.manual_portfolio_positions ?? []
   );
   const [coachingTake, setCoachingTake] = useState(review?.coaching_take ?? "");
-  // Adjusting state in response to a prop/action-result change, done
-  // during render per React's guidance rather than in a useEffect (which
-  // would cause an extra render pass) — see "Adjusting state when a prop
-  // changes" in the React docs. Guarded by prevSuggestion so this only
-  // fires once per distinct generation result, never on every render.
-  const [prevSuggestion, setPrevSuggestion] = useState(generateState.suggestion);
-  if (generateState.suggestion !== prevSuggestion) {
-    setPrevSuggestion(generateState.suggestion);
-    if (generateState.suggestion) setCoachingTake(generateState.suggestion);
-  }
 
   const errors = state.fieldErrors;
 
@@ -119,8 +108,33 @@ export function DailyReviewForm({
     setNewTodo("");
   }
 
+  // Deliberately a plain onClick call to the Server Action (not
+  // formAction/useActionState) — this reads the form's CURRENT values
+  // via FormData without ever performing a native form submission, so
+  // there is no possibility of a browser navigation discarding unsaved
+  // edits elsewhere on the page while the (potentially slow, LLM-backed)
+  // request is in flight.
+  async function handleGenerate() {
+    if (!formRef.current) return;
+    setGeneratePending(true);
+    setGenerateError(null);
+    try {
+      const formData = new FormData(formRef.current);
+      const result = await generateCoachTakeAction(formData);
+      if (result.error) {
+        setGenerateError(result.error);
+      } else if (result.suggestion) {
+        setCoachingTake(result.suggestion);
+      }
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : "KI-Fazit konnte nicht generiert werden.");
+    } finally {
+      setGeneratePending(false);
+    }
+  }
+
   return (
-    <form action={formAction} className="space-y-6">
+    <form ref={formRef} action={formAction} className="space-y-6">
       {state.formError ? (
         <p className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative">
           {state.formError}
@@ -455,8 +469,8 @@ export function DailyReviewForm({
               Coaching Take
             </label>
             <button
-              type="submit"
-              formAction={generateFormAction}
+              type="button"
+              onClick={handleGenerate}
               disabled={generatePending}
               className="rounded-md border border-accent/50 px-2.5 py-1 text-xs text-accent transition-colors hover:bg-accent/10 disabled:opacity-60"
             >
@@ -471,7 +485,7 @@ export function DailyReviewForm({
             rows={4}
             className={inputClass}
           />
-          {generateState.error ? <p className="text-xs text-negative">{generateState.error}</p> : null}
+          {generateError ? <p className="text-xs text-negative">{generateError}</p> : null}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FieldText name="selfGrade" label="Self Grade" defaultValue={review?.self_grade ?? ""} />

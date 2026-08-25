@@ -59,10 +59,16 @@ export type GenerateCoachTakeState = { suggestion: string | null; error: string 
  * returns a suggestion for the client to drop into the Coaching Take
  * field — never writes to the DB itself, so the user always reviews/
  * edits before the normal "Speichern" actually persists it.
+ *
+ * Called directly from a client onClick handler (see DailyReviewForm),
+ * NOT via <form action>/useActionState — this action performs no DB
+ * write, so it must never call revalidatePath: doing so previously
+ * forced a full server-data refresh of the page while the user still
+ * had unsaved edits sitting only in the browser, which is what was
+ * wiping the rest of the review whenever this button was clicked.
  */
 export async function generateCoachingTakeAction(
   tradeDate: string,
-  _prevState: GenerateCoachTakeState,
   formData: FormData
 ): Promise<GenerateCoachTakeState> {
   const parsed = parseDailyReviewForm(formData);
