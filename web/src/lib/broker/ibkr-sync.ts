@@ -35,6 +35,7 @@ import {
   type ReconcileFill,
 } from "@/lib/campaigns/reconcile";
 import { fetchFillsForCampaigns, sumClosedCampaignRealizedPnl } from "@/lib/campaigns/realized-pnl";
+import { computeLossStreakCounter } from "@/lib/campaigns/loss-streak";
 
 type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
 
@@ -418,6 +419,14 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
         // app's history") — never flips the sync to "partial".
         notes.push(mtdResult.info);
       }
+
+      const lossStreakResult = await syncLossStateAutoCounter(supabase, commitmentResult.data.id, tradeDate);
+      if (lossStreakResult.error) {
+        notes.push(lossStreakResult.error);
+        hadPartialIssue = true;
+      } else if (lossStreakResult.info) {
+        notes.push(lossStreakResult.info);
+      }
     }
   } catch (e) {
     notes.push(e instanceof Error ? e.message : "Shadowlist-Abgleich fehlgeschlagen.");
@@ -539,4 +548,45 @@ async function syncMtdAutoFreshEntryPct(
   }
 
   return { error: null, info: `MTD-Auto (Fresh Entries) aktualisiert: ${pct}%.` };
+}
+
+/**
+ * Computes the loss-streak auto-counter (commitments.loss_state_auto_counter)
+ * per the user's exact rules — see lib/campaigns/loss-streak.ts for the
+ * full algorithm. Considers every campaign up to and including tradeDate
+ * (open and closed; no month-scoping like MTD — this is a genuine
+ * all-time rolling streak, not reset at month boundaries), writes the
+ * result onto today's LOCKED commitment, mirroring syncMtdAutoFreshEntryPct.
+ */
+async function syncLossStateAutoCounter(
+  supabase: SupabaseAdminClient,
+  commitmentId: string,
+  tradeDate: string
+): Promise<{ error: string | null; info: string | null }> {
+  const { data: campaigns, error: campaignsError } = await supabase
+    .from("campaigns")
+    .select("id, status, ended_at")
+    .lte("trade_date", tradeDate);
+
+  if (campaignsError) {
+    return { error: `Verlustzähler-Berechnung fehlgeschlagen: ${campaignsError.message}`, info: null };
+  }
+
+  const allCampaigns = (campaigns ?? []) as { id: string; status: string; ended_at: string | null }[];
+  const fillsByCampaignId = await fetchFillsForCampaigns(
+    supabase,
+    allCampaigns.map((c) => ({ id: c.id }))
+  );
+  const counter = computeLossStreakCounter(allCampaigns, fillsByCampaignId);
+
+  const { error: updateError } = await supabase
+    .from("commitments")
+    .update({ loss_state_auto_counter: counter })
+    .eq("id", commitmentId);
+
+  if (updateError) {
+    return { error: `Verlustzähler konnte nicht gespeichert werden: ${updateError.message}`, info: null };
+  }
+
+  return { error: null, info: `Verlustzähler (auto) aktualisiert: ${counter}.` };
 }
