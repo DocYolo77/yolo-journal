@@ -100,3 +100,46 @@ export const NAV_ITEMS: NavItem[] = [
 // href kept here (not in NAV_ITEMS) so a future phase can re-add them
 // without redesigning this file.
 export const COMING_LATER_ROUTES = ["/monthly-review", "/rules-timeline", "/drive-export"];
+
+// Crypto journal — a deliberately separate, much lighter section (no
+// daily Pre-Market Commitment/Lock/Shadowlist workflow applies here, see
+// lib/data/crypto-trades.ts's own header comment). Rendered as its own
+// labeled group below a divider at the bottom of the sidebar, not mixed
+// into the stock-journal NAV_ITEMS above.
+export const CRYPTO_NAV_GROUP_LABEL = "Cryptotrades";
+
+export const CRYPTO_NAV_ITEMS: NavItem[] = [
+  {
+    href: "/crypto",
+    label: "Trades",
+    icon: (
+      <svg {...iconProps} aria-hidden="true">
+        <path d="M3 17l5-5 4 4 8-8" />
+        <path d="M14 8h6v6" />
+      </svg>
+    ),
+  },
+  {
+    href: "/crypto/learnings",
+    label: "Learnings",
+    icon: (
+      <svg {...iconProps} aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+        <path d="M9 7h7M9 11h5" />
+      </svg>
+    ),
+  },
+  {
+    href: "/crypto/weekly-review",
+    label: "Weekly Review",
+    icon: (
+      <svg {...iconProps} aria-hidden="true">
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M8 3v3M16 3v3" />
+        <path d="M7 14h3M14 14h3M7 17h3" />
+      </svg>
+    ),
+  },
+];

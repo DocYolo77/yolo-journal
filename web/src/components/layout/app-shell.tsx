@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS } from "./nav-items";
+import { CRYPTO_NAV_GROUP_LABEL, CRYPTO_NAV_ITEMS, NAV_ITEMS } from "./nav-items";
 import { logoutAction } from "@/app/login/actions";
 
 function LogoutButton() {
@@ -21,6 +21,33 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function NavLinkRow({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: (typeof NAV_ITEMS)[number];
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  const active = isActive(pathname, item.href);
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "bg-surface-hover text-foreground"
+          : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+      }`}
+    >
+      <span className={active ? "text-accent" : ""}>{item.icon}</span>
+      {item.label}
+    </Link>
+  );
+}
+
 function NavLinks({
   pathname,
   onNavigate,
@@ -30,25 +57,21 @@ function NavLinks({
 }) {
   return (
     <nav className="flex flex-1 flex-col gap-1 px-3 py-3">
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              active
-                ? "bg-surface-hover text-foreground"
-                : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-            }`}
-          >
-            <span className={active ? "text-accent" : ""}>{item.icon}</span>
-            {item.label}
-          </Link>
-        );
-      })}
+      {NAV_ITEMS.map((item) => (
+        <NavLinkRow key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+      ))}
+
+      {/* Bottom-left group, separated by a divider — deliberately kept
+          apart from the stock-journal items above since Crypto is a
+          functionally separate, much lighter section. */}
+      <div className="mt-auto border-t border-border pt-3">
+        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {CRYPTO_NAV_GROUP_LABEL}
+        </p>
+        {CRYPTO_NAV_ITEMS.map((item) => (
+          <NavLinkRow key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+        ))}
+      </div>
     </nav>
   );
 }
@@ -57,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const pathname = usePathname();
   const activeLabel =
-    NAV_ITEMS.find((item) => isActive(pathname, item.href))?.label ??
+    [...NAV_ITEMS, ...CRYPTO_NAV_ITEMS].find((item) => isActive(pathname, item.href))?.label ??
     "yolo-journal";
 
   return (

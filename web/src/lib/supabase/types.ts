@@ -700,3 +700,77 @@ export type WeeklyReportSnapshotRow = {
   snapshot: WeeklyReportSnapshotData;
   created_at: string;
 };
+
+// 20260826000000_create_crypto_journal.sql — deliberately separate,
+// much lighter Crypto journal (see that migration's header comment).
+
+export type CryptoDirection = "LONG" | "SHORT";
+export type CryptoProduct = "SPOT" | "PERP";
+export type CryptoTradeStatus = "OPEN" | "CLOSED";
+
+export type CryptoTradeRow = {
+  id: string;
+  user_id: string | null;
+
+  trade_date: string;
+  coin: string;
+  direction: CryptoDirection;
+  product: CryptoProduct;
+
+  risk_usd: number | null;
+  risk_pct: number | null;
+  result_usd: number | null;
+  result_r: number | null;
+
+  /** Storage path in the "crypto-screenshots" bucket, not a URL — a signed URL is generated at render time. */
+  entry_screenshot_path: string | null;
+  after_screenshot_path: string | null;
+
+  thesis: string | null;
+  management: string | null;
+
+  review_good: string | null;
+  review_bad: string | null;
+  review_better: string | null;
+  lesson: string | null;
+
+  status: CryptoTradeStatus;
+  closed_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
+export type CryptoLearningRow = {
+  id: string;
+  user_id: string | null;
+
+  trade_id: string | null;
+  lesson: string;
+
+  /** Denormalized from the origin trade at creation time — survives that trade being deleted. */
+  trade_date: string | null;
+  coin: string | null;
+
+  tags: string[];
+  sort_order: number;
+
+  created_at: string;
+  updated_at: string;
+};
+
+export type CryptoWeeklyReviewRow = {
+  id: string;
+  user_id: string | null;
+
+  week_start: string;
+  week_end: string;
+
+  good: string | null;
+  bad: string | null;
+  learned: string | null;
+  focus_next_week: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
