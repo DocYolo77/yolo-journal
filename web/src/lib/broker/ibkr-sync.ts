@@ -20,7 +20,7 @@ import { getCurrentTradeDateET, getTradeDateForInstant } from "@/lib/trade-date"
 import { computeDedupKey } from "./execution-normalize";
 import { fetchFlexStatementXml } from "./ibkr-flex-client";
 import {
-  normalizeFlexAccountSnapshot,
+  normalizeFlexAccountSnapshots,
   parseOpenPositions,
   parseTradeConfirms,
   type NormalizedFlexAccountSnapshot,
@@ -305,16 +305,22 @@ async function checkUnresolvedPriorPositions(supabase: SupabaseAdminClient, posi
 
 async function syncAccountAndPositions(
   supabase: SupabaseAdminClient
-): Promise<{ snapshot: NormalizedFlexAccountSnapshot | null; positions: NormalizedFlexPosition[]; error: string | null }> {
+): Promise<{ snapshots: NormalizedFlexAccountSnapshot[]; positions: NormalizedFlexPosition[]; error: string | null }> {
   const runId = await startSyncRun(supabase, "account_snapshot");
   try {
     const xml = await fetchFlexStatementXml("activity");
     const capturedAt = new Date().toISOString();
-    const snapshot = normalizeFlexAccountSnapshot(xml, { capturedAt });
+    // One row per date in the Activity query's trailing window, not
+    // just "today" — see normalizeFlexAccountSnapshots' own doc comment.
+    // Re-syncing later naturally inserts fresh rows for dates already
+    // covered by an earlier sync too; that's fine (append-only history,
+    // same as every other broker_* table here) — every read path already
+    // picks the most recent captured_at per trading_date.
+    const snapshots = normalizeFlexAccountSnapshots(xml, { capturedAt });
     const positions = parseOpenPositions(xml, { capturedAt });
 
-    if (snapshot) {
-      const { error: snapshotError } = await supabase.from("broker_account_snapshots").insert(snapshot);
+    if (snapshots.length > 0) {
+      const { error: snapshotError } = await supabase.from("broker_account_snapshots").insert(snapshots);
       if (snapshotError) throw new Error(`Account-Snapshot-Insert fehlgeschlagen: ${snapshotError.message}`);
     }
     if (positions.length > 0) {
@@ -322,14 +328,14 @@ async function syncAccountAndPositions(
       if (positionsError) throw new Error(`Positions-Insert fehlgeschlagen: ${positionsError.message}`);
     }
 
-    const rowCount = positions.length + (snapshot ? 1 : 0);
+    const rowCount = positions.length + snapshots.length;
     await finalizeSyncRun(supabase, runId, { status: "success", rowsReceived: rowCount, rowsInserted: rowCount });
 
-    return { snapshot, positions, error: null };
+    return { snapshots, positions, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler beim Account/Positions-Sync.";
     await finalizeSyncRun(supabase, runId, { status: "failed", errorSummary: message });
-    return { snapshot: null, positions: [], error: message };
+    return { snapshots: [], positions: [], error: message };
   }
 }
 
@@ -403,16 +409,33 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
         hadPartialIssue = true;
       }
 
-      const mtdError = await syncMtdAutoFreshEntryPct(supabase, commitmentResult.data.id, tradeDate);
-      if (mtdError) {
-        notes.push(mtdError);
+      const mtdResult = await syncMtdAutoFreshEntryPct(supabase, commitmentResult.data.id, tradeDate);
+      if (mtdResult.error) {
+        notes.push(mtdResult.error);
         hadPartialIssue = true;
+      } else if (mtdResult.info) {
+        // Informational only (e.g. "no baseline yet this early in the
+        // app's history") — never flips the sync to "partial".
+        notes.push(mtdResult.info);
       }
     }
   } catch (e) {
     notes.push(e instanceof Error ? e.message : "Shadowlist-Abgleich fehlgeschlagen.");
     hadPartialIssue = true;
   }
+
+  if (accountResult.snapshots.length > 1) {
+    const dates = accountResult.snapshots
+      .map((s) => s.trading_date)
+      .sort()
+      .join(", ");
+    notes.push(`Portfolio-Snapshot für ${accountResult.snapshots.length} Tage aktualisiert (${dates}).`);
+  }
+
+  const latestSnapshot = accountResult.snapshots.reduce<NormalizedFlexAccountSnapshot | null>(
+    (best, s) => (!best || s.trading_date > best.trading_date ? s : best),
+    null
+  );
 
   const completedAt = new Date().toISOString();
   const status: "success" | "partial" = hadPartialIssue ? "partial" : "success";
@@ -432,7 +455,7 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
     completedAt,
     executionsImported: executionsResult.inserted.length,
     executionsSkipped: executionsResult.skipped,
-    netLiquidationValue: accountResult.snapshot?.net_liquidation_value ?? null,
+    netLiquidationValue: latestSnapshot?.net_liquidation_value ?? null,
     positionsCount: accountResult.positions.length,
     notes,
     error: null,
@@ -456,7 +479,7 @@ async function syncMtdAutoFreshEntryPct(
   supabase: SupabaseAdminClient,
   commitmentId: string,
   tradeDate: string
-): Promise<string | null> {
+): Promise<{ error: string | null; info: string | null }> {
   const monthStart = `${tradeDate.slice(0, 7)}-01`;
 
   const { data: campaigns, error: campaignsError } = await supabase
@@ -466,7 +489,7 @@ async function syncMtdAutoFreshEntryPct(
     .lte("trade_date", tradeDate);
 
   if (campaignsError) {
-    return `MTD-Berechnung fehlgeschlagen: ${campaignsError.message}`;
+    return { error: `MTD-Berechnung fehlgeschlagen: ${campaignsError.message}`, info: null };
   }
 
   const monthCampaigns = (campaigns ?? []) as { id: string; status: string }[];
@@ -486,14 +509,22 @@ async function syncMtdAutoFreshEntryPct(
     .maybeSingle();
 
   if (baselineError) {
-    return `MTD-Berechnung fehlgeschlagen: ${baselineError.message}`;
+    return { error: `MTD-Berechnung fehlgeschlagen: ${baselineError.message}`, info: null };
   }
 
   const baselineNlv = (baselineRow?.net_liquidation_value as number | null) ?? null;
   if (!baselineNlv) {
-    // No snapshot before this month yet (e.g. sync only started this
-    // month) — genuinely not computable, not a failure.
-    return null;
+    // No snapshot before this month yet — genuinely not computable, not
+    // a failure. Concretely: this is expected for every day in the
+    // first calendar month IBKR sync ever ran, since there's no prior-
+    // month NLV to use as a baseline. It starts working automatically
+    // once a snapshot from the prior month exists. Surfaced as an info
+    // note (never flagged as a partial-sync failure) so this doesn't
+    // look like a silent failure to the user running "Sync IBKR now".
+    return {
+      error: null,
+      info: `MTD-Auto-Berechnung noch nicht möglich: keine NLV-Basis von vor dem ${monthStart} vorhanden (funktioniert automatisch, sobald ein Snapshot aus dem Vormonat existiert).`,
+    };
   }
 
   const pct = Math.round((realizedPnl / baselineNlv) * 100 * 100) / 100;
@@ -504,8 +535,8 @@ async function syncMtdAutoFreshEntryPct(
     .eq("id", commitmentId);
 
   if (updateError) {
-    return `MTD-Wert konnte nicht gespeichert werden: ${updateError.message}`;
+    return { error: `MTD-Wert konnte nicht gespeichert werden: ${updateError.message}`, info: null };
   }
 
-  return null;
+  return { error: null, info: `MTD-Auto (Fresh Entries) aktualisiert: ${pct}%.` };
 }

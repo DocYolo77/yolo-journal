@@ -86,55 +86,77 @@ const NUM_FIELDS = [
 ] as const;
 
 /**
- * Builds an account snapshot from the most recent
- * <EquitySummaryByReportDateInBase> row (the Activity query can return
- * more than one trailing row; the highest reportDate is "now") plus the
- * "Total (All Assets)" <FIFOPerformanceSummaryUnderlying> row for
- * unrealized PnL. capturedAt is when this sync actually ran — distinct
- * from tradingDate, which is IBKR's own statement reportDate.
+ * Builds one account snapshot per <EquitySummaryByReportDateInBase> row
+ * — the Activity query's configured period returns a trailing WINDOW of
+ * report dates, not just "today" (e.g. the last several calendar days),
+ * so a single sync naturally backfills NLV/exposure for every date in
+ * that window, not only the most recent one. This is what lets a Daily
+ * Review being caught up for a past date (e.g. doing 25./26./27.08 on
+ * the 27th) actually get that specific date's real EOD figures — IBKR's
+ * Flex Web Service has no per-request date-range parameter (a query's
+ * period is fixed in its own IBKR-side definition), so this trailing
+ * window is the only lookback mechanism available, and previously only
+ * its single latest row was ever kept, discarding the rest.
+ *
+ * unrealized_pnl (from "Total (All Assets)" in
+ * <FIFOPerformanceSummaryUnderlying>) reflects the CURRENT portfolio
+ * only — IBKR gives no historical per-day breakdown of it via this
+ * query — so it's only ever attached to the row for the latest
+ * reportDate; backfilled historical rows keep it null rather than
+ * reusing today's number for a different date.
+ *
+ * capturedAt is when this sync actually ran — distinct from
+ * trading_date, which is IBKR's own statement reportDate.
  */
-export function normalizeFlexAccountSnapshot(
+export function normalizeFlexAccountSnapshots(
   xml: string,
   params: { capturedAt: string }
-): NormalizedFlexAccountSnapshot | null {
+): NormalizedFlexAccountSnapshot[] {
   const equityRows = extractElements(xml, "EquitySummaryByReportDateInBase");
-  if (equityRows.length === 0) return null;
+  if (equityRows.length === 0) return [];
 
-  const latest = equityRows.reduce((best, row) => (row.reportDate > best.reportDate ? row : best));
-  const values = Object.fromEntries(NUM_FIELDS.map((f) => [f, latest[f] ? Number(latest[f]) : 0])) as Record<
-    (typeof NUM_FIELDS)[number],
-    number
-  >;
-
-  const grossPositionValue = values.stock + values.options + values.bonds + values.commodities + values.funds;
-  const netLiquidationValue = latest.total ? Number(latest.total) : null;
+  const latestReportDate = equityRows.reduce(
+    (best, row) => (row.reportDate > best ? row.reportDate : best),
+    equityRows[0].reportDate
+  );
 
   const totalPnlRow = extractElements(xml, "FIFOPerformanceSummaryUnderlying").find(
     (row) => row.description === "Total (All Assets)"
   );
 
-  return {
-    provider: "IBKR",
-    provider_account_id: latest.accountId,
-    trading_date: parseIbkrDateToIsoDate(latest.reportDate),
-    captured_at: params.capturedAt,
-    net_liquidation_value: netLiquidationValue,
-    start_of_day_nlv: null,
-    cash: latest.cash ? Number(latest.cash) : null,
-    buying_power: null,
-    gross_position_value: grossPositionValue,
-    gross_exposure_pct:
-      netLiquidationValue && netLiquidationValue !== 0 ? (grossPositionValue / netLiquidationValue) * 100 : null,
-    net_exposure_pct: null,
-    realized_pnl_day: null,
-    unrealized_pnl: totalPnlRow?.totalUnrealizedPnl ? Number(totalPnlRow.totalUnrealizedPnl) : null,
-    unrealized_pnl_day: null,
-    maintenance_margin: null,
-    available_funds: null,
-    excess_liquidity: null,
-    base_currency: latest.currency || null,
-    source: "ibkr_flex_sync",
-  };
+  return equityRows.map((row) => {
+    const values = Object.fromEntries(NUM_FIELDS.map((f) => [f, row[f] ? Number(row[f]) : 0])) as Record<
+      (typeof NUM_FIELDS)[number],
+      number
+    >;
+
+    const grossPositionValue = values.stock + values.options + values.bonds + values.commodities + values.funds;
+    const netLiquidationValue = row.total ? Number(row.total) : null;
+    const isLatest = row.reportDate === latestReportDate;
+
+    return {
+      provider: "IBKR",
+      provider_account_id: row.accountId,
+      trading_date: parseIbkrDateToIsoDate(row.reportDate),
+      captured_at: params.capturedAt,
+      net_liquidation_value: netLiquidationValue,
+      start_of_day_nlv: null,
+      cash: row.cash ? Number(row.cash) : null,
+      buying_power: null,
+      gross_position_value: grossPositionValue,
+      gross_exposure_pct:
+        netLiquidationValue && netLiquidationValue !== 0 ? (grossPositionValue / netLiquidationValue) * 100 : null,
+      net_exposure_pct: null,
+      realized_pnl_day: null,
+      unrealized_pnl: isLatest && totalPnlRow?.totalUnrealizedPnl ? Number(totalPnlRow.totalUnrealizedPnl) : null,
+      unrealized_pnl_day: null,
+      maintenance_margin: null,
+      available_funds: null,
+      excess_liquidity: null,
+      base_currency: row.currency || null,
+      source: "ibkr_flex_sync",
+    };
+  });
 }
 
 // ---- Positions (type="AF", <OpenPosition .../> elements) ----

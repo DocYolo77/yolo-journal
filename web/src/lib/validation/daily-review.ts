@@ -13,7 +13,12 @@ import type {
 
 export const REVIEW_TYPES: DailyReviewType[] = ["ENTRY", "MANAGEMENT"];
 
-export const SETUP_OPTIONS = ["Breakout", "Pullback", "Episodic Pivot"];
+// Replaced 2026-08 for a cleaner, non-overlapping Setup/Structure split
+// — the old ["Breakout","Pullback","Episodic Pivot"] vocabulary blurred
+// into Structure's own categories. Historical ticker reviews keep
+// whatever value they were saved with (free text under the hood); only
+// the selectable options change going forward.
+export const SETUP_OPTIONS = ["EP", "WEDGE_POP", "MOMENTUM_PULLBACK", "REBASE"];
 
 // "Trigger" renamed to "Entry-Taktik" per user correction — the ORB
 // entries (M30/M15/M5) are the ones that gate which Stop Placement
