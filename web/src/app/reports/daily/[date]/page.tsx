@@ -272,6 +272,7 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
                   <DetailGrid
                     items={[
                       ["Setup", t.setup || "–"],
+                      ["Qullamaggie KI-Rating", t.qullamaggie_rating || "–"],
                       ["Entry-Taktik", t.entry_tactic || "–"],
                       [
                         "Stop Placement",
@@ -289,7 +290,9 @@ export default async function DailyReportPage({ params }: { params: Promise<{ da
                       ["Exit Taktik", t.exit_tactic || "–"],
                     ]}
                   />
-                  {t.thesis ? <p className="mt-2 text-sm text-muted-foreground">Thesis: {t.thesis}</p> : null}
+                  {t.thesis ? (
+                    <p className="mt-2 text-sm text-muted-foreground">Thesis / D0 - Outcome: {t.thesis}</p>
+                  ) : null}
                   {t.notes ? (
                     <p className="text-sm text-muted-foreground">Outcome D0 / Notes: {t.notes}</p>
                   ) : null}

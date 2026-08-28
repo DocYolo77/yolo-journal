@@ -106,7 +106,16 @@ export class MassiveMarketDataProvider implements MarketDataProvider {
         ? computeAtrPctExtensionFromMa({ price, movingAverage: sma50, atr: atr14 })
         : null;
 
-    return { price, sma50, atr14, atrExtensionMultiple };
+    let diagnostic: string | undefined;
+    if (atrExtensionMultiple === null) {
+      const missing: string[] = [];
+      if (price === null) missing.push("Preis (Snapshot + D-1-Close beide leer)");
+      if (sma50 === null) missing.push("SMA50 (D-1)");
+      if (atr14 === null) missing.push(`ATR14 (D-1, ${indicators ? "zu wenig Tagesbars" : "keine Tagesbars für den Zeitraum"})`);
+      diagnostic = `Massive lieferte keine Daten für: ${missing.join(", ")}.`;
+    }
+
+    return { price, sma50, atr14, atrExtensionMultiple, diagnostic };
   }
 
   async getDailyBarsRange(params: { ticker: string; from: string; to: string }): Promise<OhlcBar[]> {

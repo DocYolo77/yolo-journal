@@ -18,7 +18,11 @@ export const REVIEW_TYPES: DailyReviewType[] = ["ENTRY", "MANAGEMENT"];
 // into Structure's own categories. Historical ticker reviews keep
 // whatever value they were saved with (free text under the hood); only
 // the selectable options change going forward.
-export const SETUP_OPTIONS = ["EP", "WEDGE_POP", "MOMENTUM_PULLBACK", "REBASE"];
+// Re-cased 2026-08 to normal, readable text (was the raw
+// EP/WEDGE_POP/MOMENTUM_PULLBACK/REBASE codes) once Structure was
+// dropped from the editor and Setup became the only classification
+// field left.
+export const SETUP_OPTIONS = ["Rebase", "Episodic Pivot", "Momentum Pullback", "Wedge Pop"];
 
 // "Trigger" renamed to "Entry-Taktik" per user correction — the ORB
 // entries (M30/M15/M5) are the ones that gate which Stop Placement
@@ -140,6 +144,7 @@ export function normalizeTickerReview(row: Partial<TickerReview> & Record<string
     structure: (row.structure ?? "").toString(),
     structure_rating: (row.structure_rating ?? "").toString(),
     thesis: (row.thesis ?? "").toString().trim(),
+    qullamaggie_rating: (row.qullamaggie_rating ?? "").toString().trim(),
     management_grade: (row.management_grade ?? "").toString(),
     rule_status: (row.rule_status ?? "").toString(),
     notes: (row.notes ?? "").toString().trim(),

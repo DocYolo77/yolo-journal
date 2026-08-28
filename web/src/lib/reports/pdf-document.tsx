@@ -255,6 +255,7 @@ export function DailyReportPdfDocument({
               <View key={t.ticker} style={styles.tickerBlock}>
                 <Text style={styles.sectionTitle}>{t.ticker}</Text>
                 <DetailRow label="Setup" value={t.setup || "–"} />
+                <DetailRow label="Qullamaggie KI-Rating" value={t.qullamaggie_rating || "–"} />
                 <DetailRow label="Entry-Taktik" value={t.entry_tactic || "–"} />
                 <DetailRow
                   label="Stop Placement"
@@ -272,7 +273,7 @@ export function DailyReportPdfDocument({
                 <DetailRow label="Rule Status" value={t.rule_status || "–"} />
                 <DetailRow label="Exit Setup" value={t.exit_setup || "–"} />
                 <DetailRow label="Exit Taktik" value={t.exit_tactic || "–"} />
-                {t.thesis ? <Text style={styles.paragraph}>Thesis: {t.thesis}</Text> : null}
+                {t.thesis ? <Text style={styles.paragraph}>Thesis / D0 - Outcome: {t.thesis}</Text> : null}
                 {t.notes ? <Text style={styles.paragraph}>Outcome D0 / Notes: {t.notes}</Text> : null}
                 {chart ? (
                   <>

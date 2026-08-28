@@ -84,7 +84,23 @@ async function massiveFetch<T>(
     throw new Error(`Massive API request failed: ${response.status} ${response.statusText} (${path})`);
   }
 
-  return (await response.json()) as T;
+  const body = (await response.json()) as T & { status?: string; error?: string; message?: string };
+
+  // Polygon-shaped APIs can return HTTP 200 with a body that still signals
+  // failure (e.g. plan/permission restrictions, an invalid ticker or date
+  // range) — "OK"/"DELAYED" are the documented success statuses; anything
+  // else previously fell through silently as an empty `results` array,
+  // which is indistinguishable from "genuinely no data for this range"
+  // and made a real problem (auth/plan/param issue) invisible in the UI.
+  if (body.status && body.status !== "OK" && body.status !== "DELAYED") {
+    throw new Error(
+      `Massive API meldete Status "${body.status}" für ${path}${
+        body.error || body.message ? `: ${body.error ?? body.message}` : ""
+      }`
+    );
+  }
+
+  return body;
 }
 
 export type MassiveAggBar = {

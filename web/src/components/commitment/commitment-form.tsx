@@ -177,10 +177,15 @@ export function CommitmentForm({
               {qqqLive.error ? (
                 <p className="text-xs text-negative">{qqqLive.error}</p>
               ) : qqqLive.data ? (
-                <p className="text-xs text-muted-foreground">
-                  Preis {qqqLive.data.price ?? "–"} · SMA50 {qqqLive.data.sma50 ?? "–"} · ATR14{" "}
-                  {qqqLive.data.atr14 ?? "–"}
-                </p>
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Preis {qqqLive.data.price ?? "–"} · SMA50 {qqqLive.data.sma50 ?? "–"} · ATR14{" "}
+                    {qqqLive.data.atr14 ?? "–"}
+                  </p>
+                  {qqqLive.data.diagnostic ? (
+                    <p className="text-xs text-negative">{qqqLive.data.diagnostic}</p>
+                  ) : null}
+                </>
               ) : null}
               <p className="text-xs text-muted-foreground">
                 Risk-Cap (0.5%) aktiviert sich automatisch ab QQQ-ATR-Multiple ≥ 8.
@@ -213,10 +218,15 @@ export function CommitmentForm({
               {spyLive.error ? (
                 <p className="text-xs text-negative">{spyLive.error}</p>
               ) : spyLive.data ? (
-                <p className="text-xs text-muted-foreground">
-                  Preis {spyLive.data.price ?? "–"} · SMA50 {spyLive.data.sma50 ?? "–"} · ATR14{" "}
-                  {spyLive.data.atr14 ?? "–"}
-                </p>
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Preis {spyLive.data.price ?? "–"} · SMA50 {spyLive.data.sma50 ?? "–"} · ATR14{" "}
+                    {spyLive.data.atr14 ?? "–"}
+                  </p>
+                  {spyLive.data.diagnostic ? (
+                    <p className="text-xs text-negative">{spyLive.data.diagnostic}</p>
+                  ) : null}
+                </>
               ) : null}
               <p className="text-xs text-muted-foreground">Nur informative Zweitlesung, kein eigener Risk-Cap.</p>
             </div>

@@ -78,7 +78,7 @@ function buildPrompt(params: {
   if (review.ticker_reviews.length > 0) {
     lines.push("Ticker Reviews:");
     for (const t of review.ticker_reviews) {
-      const parts = [t.setup, t.entry_tactic, t.structure_rating, t.management_grade, t.rule_status]
+      const parts = [t.setup, t.entry_tactic, t.qullamaggie_rating, t.management_grade, t.rule_status]
         .filter(Boolean)
         .join(" / ");
       lines.push(`- ${t.ticker}: ${parts || "–"}${t.notes ? ` — ${t.notes}` : ""}`);

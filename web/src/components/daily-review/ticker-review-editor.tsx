@@ -11,8 +11,6 @@ import {
   RULE_STATUS_OPTIONS,
   SETUP_OPTIONS,
   STOP_PLACEMENT_OPTIONS,
-  STRUCTURE_OPTIONS,
-  STRUCTURE_RATING_OPTIONS,
 } from "@/lib/validation/daily-review";
 import type { TickerReview } from "@/lib/supabase/types";
 
@@ -31,6 +29,7 @@ function emptyTickerReview(ticker: string): TickerReview {
     structure: "",
     structure_rating: "",
     thesis: "",
+    qullamaggie_rating: "",
     management_grade: "",
     rule_status: "",
     notes: "",
@@ -202,18 +201,6 @@ export function TickerReviewEditor({
                 </label>
               ) : null}
               <SelectField
-                label="Structure"
-                value={row.structure}
-                onChange={(v) => updateRow(index, { structure: v })}
-                options={STRUCTURE_OPTIONS}
-              />
-              <SelectField
-                label="Structure Rating"
-                value={row.structure_rating}
-                onChange={(v) => updateRow(index, { structure_rating: v })}
-                options={STRUCTURE_RATING_OPTIONS}
-              />
-              <SelectField
                 label="Management Grade"
                 value={row.management_grade}
                 onChange={(v) => updateRow(index, { management_grade: v })}
@@ -239,11 +226,15 @@ export function TickerReviewEditor({
               />
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <TextField label="Thesis" value={row.thesis} onChange={(v) => updateRow(index, { thesis: v })} />
               <TextField
-                label="Outcome D0 / Notes"
-                value={row.notes}
-                onChange={(v) => updateRow(index, { notes: v })}
+                label="Thesis / D0 - Outcome"
+                value={row.thesis}
+                onChange={(v) => updateRow(index, { thesis: v })}
+              />
+              <TextField
+                label="Qullamaggie KI - Rating"
+                value={row.qullamaggie_rating}
+                onChange={(v) => updateRow(index, { qullamaggie_rating: v })}
               />
             </div>
             {chartSvgByTicker?.[row.ticker] ? (

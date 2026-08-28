@@ -175,7 +175,11 @@ export type TickerReview = {
   stop_placement_pct: number | null;
   structure: string;
   structure_rating: string;
+  // Combined 2026-08: the editor now shows Thesis and D0-Outcome as one
+  // box — `thesis` holds that combined text going forward. `notes` stays
+  // in the type/normalizer for historical rows only (no longer editable).
   thesis: string;
+  qullamaggie_rating: string;
   management_grade: string;
   rule_status: string;
   notes: string;

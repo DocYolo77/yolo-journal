@@ -37,6 +37,14 @@ export type IndexExtensionSnapshot = {
   atr14: number | null;
   /** computeAtrPctExtensionFromMa(price, sma50, atr14) — null if any input is missing. */
   atrExtensionMultiple: number | null;
+  /**
+   * Set only when atrExtensionMultiple is null — names exactly which
+   * input(s) came back empty from Massive (e.g. "SMA50: 0 Werte,
+   * ATR14: 0 Bars") so a silent-empty API response (permission/plan
+   * restriction, bad date range, etc.) is visible instead of just three
+   * dashes with no lead on the cause.
+   */
+  diagnostic?: string;
 };
 
 export interface MarketDataProvider {
