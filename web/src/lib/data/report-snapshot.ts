@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getDailyReviewContext } from "./daily-review";
 import { getPortfolioSnapshotForDate } from "./portfolio";
+import { getTradeDateForInstant } from "@/lib/trade-date";
 import {
   computeOrbLevelsFromIntraday,
   getDailyChartSeries,
@@ -192,14 +193,50 @@ async function assembleMarketData(
  * chart dots. Real IBKR fills only (campaigns -> campaign_executions ->
  * broker_executions); empty when nothing has synced for this day yet.
  */
+/**
+ * campaigns.trade_date is set once, at open_campaign time, and never
+ * updated afterwards — so a multi-day campaign (opened on an earlier
+ * day, added to or closed today) does NOT satisfy `trade_date =
+ * tradeDate` even though today's fills are exactly what a "Campaigns
+ * heute" view is meant to surface. Determines "activity today" the same
+ * way trade_date itself gets assigned (getTradeDateForInstant on each
+ * fill's executed_at), so a campaign shows up on every day it actually
+ * had a fill, not just the day it was first opened.
+ *
+ * Fetches all campaign_executions/broker_executions unconditionally
+ * (no date-bounded query) rather than an untested nested-embed Supabase
+ * filter — fine at this app's single-account scale (low thousands of
+ * fills over its lifetime at most).
+ */
+async function getCampaignIdsWithActivityOnDate(supabase: SupabaseAdminClient, tradeDate: string): Promise<Set<string>> {
+  const { data: links } = await supabase.from("campaign_executions").select("campaign_id, broker_execution_id");
+  if (!links || links.length === 0) return new Set();
+
+  const executionIds = links.map((l) => l.broker_execution_id as string);
+  const { data: executions } = await supabase.from("broker_executions").select("id, executed_at").in("id", executionIds);
+  const executedAtById = new Map((executions ?? []).map((e) => [e.id as string, e.executed_at as string]));
+
+  const campaignIds = new Set<string>();
+  for (const link of links) {
+    const executedAt = executedAtById.get(link.broker_execution_id as string);
+    if (executedAt && getTradeDateForInstant(executedAt) === tradeDate) {
+      campaignIds.add(link.campaign_id as string);
+    }
+  }
+  return campaignIds;
+}
+
 async function assembleCampaignData(
   supabase: SupabaseAdminClient,
   tradeDate: string
 ): Promise<DailyReportCampaign[]> {
+  const activeCampaignIds = await getCampaignIdsWithActivityOnDate(supabase, tradeDate);
+  if (activeCampaignIds.size === 0) return [];
+
   const { data: campaignRows } = await supabase
     .from("campaigns")
     .select("id, symbol, direction, status, started_at, ended_at")
-    .eq("trade_date", tradeDate)
+    .in("id", Array.from(activeCampaignIds))
     .order("started_at", { ascending: true });
 
   const campaigns = campaignRows ?? [];
