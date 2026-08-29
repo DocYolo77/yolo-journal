@@ -50,6 +50,17 @@ export const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/ibkr-import",
+    label: "IBKR Import",
+    icon: (
+      <svg {...iconProps} aria-hidden="true">
+        <path d="M12 3v12" />
+        <path d="M7 10l5 5 5-5" />
+        <path d="M5 19h14" />
+      </svg>
+    ),
+  },
+  {
     href: "/daily-review",
     label: "Daily Review",
     icon: (

@@ -778,3 +778,16 @@ export type CryptoWeeklyReviewRow = {
   created_at: string;
   updated_at: string;
 };
+
+// 20260829000000_create_ibkr_import_raw.sql
+
+export type IbkrImportRawRow = {
+  id: string;
+  user_id: string | null;
+  review_date: string;
+  schema_version: string | null;
+  snapshot_datetime: string | null;
+  raw_json: unknown;
+  imported_at: string;
+  created_at: string;
+};

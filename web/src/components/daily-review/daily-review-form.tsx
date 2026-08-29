@@ -211,6 +211,11 @@ export function DailyReviewForm({
               " · kein Vortag synchronisiert, Daily P&L nicht berechenbar"
             )}
             {dailyPnlSnapshot.capturedAt ? ` · Stand ${formatDateTime(dailyPnlSnapshot.capturedAt)}` : ""}
+            {dailyPnlSnapshot.source === "manual_json_import"
+              ? " · IBKR Data: Manual Import"
+              : dailyPnlSnapshot.source === "ibkr_flex_sync"
+                ? " · IBKR Data: Synced"
+                : ""}
             {dailyPnlSnapshot.nlvTradingDate && dailyPnlSnapshot.nlvTradingDate !== tradeDate ? (
               <span className="text-negative">
                 {" "}

@@ -144,6 +144,8 @@ export type DailyPnlSnapshot = {
   dailyPnlPct: number | null;
   capturedAt: string | null;
   baseCurrency: string | null;
+  /** "ibkr_flex_sync" | "manual_json_import" | null — which ingestion path produced this snapshot, per §8 of the IBKR JSON import spec. */
+  source: string | null;
 };
 
 /**
@@ -171,7 +173,7 @@ export async function getDailyPnlSnapshotForDate(
 
     const { data: exactRows, error: exactError } = await supabase
       .from("broker_account_snapshots")
-      .select("net_liquidation_value, captured_at, base_currency, trading_date")
+      .select("net_liquidation_value, captured_at, base_currency, trading_date, source")
       .eq("trading_date", tradeDate)
       .order("captured_at", { ascending: false })
       .limit(1);
@@ -186,7 +188,7 @@ export async function getDailyPnlSnapshotForDate(
     if (!current) {
       const { data: fallbackRows, error: fallbackError } = await supabase
         .from("broker_account_snapshots")
-        .select("net_liquidation_value, captured_at, base_currency, trading_date")
+        .select("net_liquidation_value, captured_at, base_currency, trading_date, source")
         .lte("trading_date", tradeDate)
         .order("trading_date", { ascending: false })
         .order("captured_at", { ascending: false })
@@ -233,6 +235,7 @@ export async function getDailyPnlSnapshotForDate(
         dailyPnlPct,
         capturedAt: (current?.captured_at as string | null) ?? null,
         baseCurrency: (current?.base_currency as string | null) ?? null,
+        source: (current?.source as string | null) ?? null,
       },
       error: null,
     };

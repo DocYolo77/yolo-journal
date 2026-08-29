@@ -53,26 +53,31 @@ export function parseTradeConfirms(xml: string): RawExecution[] {
 
 // ---- Account / NLV (type="AF", Activity Flex Query) ----
 
+// Shared shape for BOTH ingestion paths — Flex sync (this file) and the
+// manual JSON import (ibkr-json-normalize.ts) — kept here since Flex was
+// first, but neither path gets its own type: same fields, nullable
+// wherever a given source can't populate them (Flex never has
+// start_of_day_nlv/buying_power/etc.; the JSON import schema does).
 export type NormalizedFlexAccountSnapshot = {
   provider: "IBKR";
   provider_account_id: string;
   trading_date: string;
   captured_at: string;
   net_liquidation_value: number | null;
-  start_of_day_nlv: null;
+  start_of_day_nlv: number | null;
   cash: number | null;
-  buying_power: null;
+  buying_power: number | null;
   gross_position_value: number | null;
   gross_exposure_pct: number | null;
-  net_exposure_pct: null;
-  realized_pnl_day: null;
+  net_exposure_pct: number | null;
+  realized_pnl_day: number | null;
   unrealized_pnl: number | null;
-  unrealized_pnl_day: null;
-  maintenance_margin: null;
-  available_funds: null;
-  excess_liquidity: null;
+  unrealized_pnl_day: number | null;
+  maintenance_margin: number | null;
+  available_funds: number | null;
+  excess_liquidity: number | null;
   base_currency: string | null;
-  source: "ibkr_flex_sync";
+  source: "ibkr_flex_sync" | "manual_json_import";
 };
 
 const NUM_FIELDS = [
@@ -161,13 +166,18 @@ export function normalizeFlexAccountSnapshots(
 
 // ---- Positions (type="AF", <OpenPosition .../> elements) ----
 
+// Same "shared shape, not a Flex-only type" note as
+// NormalizedFlexAccountSnapshot above — provider_contract_id/daily_pnl
+// are null-only from Flex (no such column in that query configuration)
+// but real values from the JSON import schema (contract_id/
+// unrealized_pnl_day).
 export type NormalizedFlexPosition = {
   provider: "IBKR";
   provider_account_id: string;
   trading_date: string;
   captured_at: string;
   symbol: string;
-  provider_contract_id: null;
+  provider_contract_id: string | null;
   asset_class: string | null;
   quantity: number;
   average_price: number | null;
@@ -175,8 +185,8 @@ export type NormalizedFlexPosition = {
   market_value: number | null;
   currency: string | null;
   unrealized_pnl: number | null;
-  daily_pnl: null;
-  raw_payload: Record<string, string>;
+  daily_pnl: number | null;
+  raw_payload: Record<string, unknown>;
 };
 
 export function parseOpenPositions(xml: string, params: { capturedAt: string }): NormalizedFlexPosition[] {

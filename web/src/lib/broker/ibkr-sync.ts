@@ -51,7 +51,7 @@ export type IbkrSyncSummary = {
   error: string | null;
 };
 
-type InsertedExecution = { id: string; symbol: string; side: "BUY" | "SELL"; quantity: number; executed_at: string };
+export type InsertedExecution = { id: string; symbol: string; side: "BUY" | "SELL"; quantity: number; executed_at: string };
 
 async function startSyncRun(
   supabase: SupabaseAdminClient,
@@ -93,20 +93,23 @@ async function finalizeSyncRun(
 }
 
 /**
- * Trades Flex fetch -> dedupe against existing broker_executions ->
- * insert only genuinely new fills. Existing dedup_key values are looked
- * up first (rather than relying purely on an upsert) so this also
- * returns precise rows_inserted/rows_skipped counts for
- * broker_sync_runs, and so newly-inserted rows come back with real ids
- * for campaign reconciliation.
+ * Dedupe against existing broker_executions -> insert only genuinely new
+ * fills. Existing dedup_key values are looked up first (rather than
+ * relying purely on an upsert) so this also returns precise
+ * rows_inserted/rows_skipped counts, and so newly-inserted rows come
+ * back with real ids for campaign reconciliation.
+ *
+ * Shared by BOTH ingestion paths — the Flex sync (syncExecutions below)
+ * and the manual JSON import (lib/broker/ibkr-json-import.ts) — so a fill
+ * imported either way is deduped, stored, and reconciled identically;
+ * see reconcileNewExecutions further down for the second half of that
+ * guarantee.
  */
-async function syncExecutions(
-  supabase: SupabaseAdminClient
+export async function insertNewExecutions(
+  supabase: SupabaseAdminClient,
+  parsed: RawExecution[]
 ): Promise<{ inserted: InsertedExecution[]; received: number; skipped: number; error: string | null }> {
-  const runId = await startSyncRun(supabase, "executions");
   try {
-    const xml = await fetchFlexStatementXml("trades");
-    const parsed: RawExecution[] = parseTradeConfirms(xml);
     const withDedup = parsed.map((raw) => ({ raw, dedupKey: computeDedupKey(raw) }));
 
     const dedupKeys = withDedup.map((w) => w.dedupKey);
@@ -151,14 +154,34 @@ async function syncExecutions(
       insertedRows = (inserted ?? []) as InsertedExecution[];
     }
 
+    return { inserted: insertedRows, received: parsed.length, skipped: parsed.length - insertedRows.length, error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unbekannter Fehler beim Executions-Import.";
+    return { inserted: [], received: 0, skipped: 0, error: message };
+  }
+}
+
+/** Trades Flex fetch -> insertNewExecutions, with broker_sync_runs bookkeeping around it. */
+async function syncExecutions(
+  supabase: SupabaseAdminClient
+): Promise<{ inserted: InsertedExecution[]; received: number; skipped: number; error: string | null }> {
+  const runId = await startSyncRun(supabase, "executions");
+  try {
+    const xml = await fetchFlexStatementXml("trades");
+    const parsed: RawExecution[] = parseTradeConfirms(xml);
+    const result = await insertNewExecutions(supabase, parsed);
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
     await finalizeSyncRun(supabase, runId, {
       status: "success",
-      rowsReceived: parsed.length,
-      rowsInserted: insertedRows.length,
-      rowsSkipped: parsed.length - insertedRows.length,
+      rowsReceived: result.received,
+      rowsInserted: result.inserted.length,
+      rowsSkipped: result.skipped,
     });
 
-    return { inserted: insertedRows, received: parsed.length, skipped: parsed.length - insertedRows.length, error: null };
+    return result;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler beim Executions-Sync.";
     await finalizeSyncRun(supabase, runId, { status: "failed", errorSummary: message });
@@ -278,7 +301,8 @@ async function reconcileSymbolFills(
   return notes;
 }
 
-async function reconcileNewExecutions(supabase: SupabaseAdminClient, newExecutions: InsertedExecution[]): Promise<string[]> {
+/** Groups new fills by symbol and applies campaign reconciliation to each — the single analysis path both ingestion routes share. */
+export async function reconcileNewExecutions(supabase: SupabaseAdminClient, newExecutions: InsertedExecution[]): Promise<string[]> {
   const bySymbol = new Map<string, InsertedExecution[]>();
   for (const e of newExecutions) {
     if (!bySymbol.has(e.symbol)) bySymbol.set(e.symbol, []);
@@ -292,7 +316,7 @@ async function reconcileNewExecutions(supabase: SupabaseAdminClient, newExecutio
   return notes;
 }
 
-async function checkUnresolvedPriorPositions(supabase: SupabaseAdminClient, positions: NormalizedFlexPosition[]): Promise<string[]> {
+export async function checkUnresolvedPriorPositions(supabase: SupabaseAdminClient, positions: NormalizedFlexPosition[]): Promise<string[]> {
   const { data: openCampaigns } = await supabase.from("campaigns").select("symbol").eq("status", "open");
   const openSymbols = new Set((openCampaigns ?? []).map((c) => c.symbol as string));
   const unresolved = findUnresolvedPriorPositions(
@@ -302,6 +326,38 @@ async function checkUnresolvedPriorPositions(supabase: SupabaseAdminClient, posi
   return unresolved.map(
     (u) => `${u.symbol}: Live-Position (${u.direction}, ${u.quantity}) ohne zugehörige offene Campaign — bitte manuell prüfen.`
   );
+}
+
+/**
+ * Inserts account/position snapshot rows. Upsert (not plain insert) on
+ * each table's natural unique key — a no-op behavior change for the Flex
+ * path (captured_at = "now" there is always fresh, so it never
+ * conflicts) but what makes the manual JSON import idempotent (§10):
+ * re-importing the same file reuses the JSON's own snapshot_datetime as
+ * captured_at, so a repeat import replaces the same row instead of
+ * erroring or piling up duplicates.
+ *
+ * Shared by both ingestion paths, same reasoning as insertNewExecutions
+ * above.
+ */
+export async function insertAccountAndPositionSnapshots(
+  supabase: SupabaseAdminClient,
+  snapshots: NormalizedFlexAccountSnapshot[],
+  positions: NormalizedFlexPosition[]
+): Promise<{ error: string | null }> {
+  if (snapshots.length > 0) {
+    const { error: snapshotError } = await supabase
+      .from("broker_account_snapshots")
+      .upsert(snapshots, { onConflict: "provider,provider_account_id,trading_date,captured_at" });
+    if (snapshotError) return { error: `Account-Snapshot-Insert fehlgeschlagen: ${snapshotError.message}` };
+  }
+  if (positions.length > 0) {
+    const { error: positionsError } = await supabase
+      .from("broker_positions_snapshots")
+      .upsert(positions, { onConflict: "provider,provider_account_id,provider_contract_id,trading_date,captured_at" });
+    if (positionsError) return { error: `Positions-Insert fehlgeschlagen: ${positionsError.message}` };
+  }
+  return { error: null };
 }
 
 async function syncAccountAndPositions(
@@ -320,14 +376,8 @@ async function syncAccountAndPositions(
     const snapshots = normalizeFlexAccountSnapshots(xml, { capturedAt });
     const positions = parseOpenPositions(xml, { capturedAt });
 
-    if (snapshots.length > 0) {
-      const { error: snapshotError } = await supabase.from("broker_account_snapshots").insert(snapshots);
-      if (snapshotError) throw new Error(`Account-Snapshot-Insert fehlgeschlagen: ${snapshotError.message}`);
-    }
-    if (positions.length > 0) {
-      const { error: positionsError } = await supabase.from("broker_positions_snapshots").insert(positions);
-      if (positionsError) throw new Error(`Positions-Insert fehlgeschlagen: ${positionsError.message}`);
-    }
+    const insertResult = await insertAccountAndPositionSnapshots(supabase, snapshots, positions);
+    if (insertResult.error) throw new Error(insertResult.error);
 
     const rowCount = positions.length + snapshots.length;
     await finalizeSyncRun(supabase, runId, { status: "success", rowsReceived: rowCount, rowsInserted: rowCount });
@@ -397,41 +447,12 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
     }
   }
 
-  // Shadowlist auto-override + MTD auto-computation for today's locked
-  // commitment, if any — a no-op (not a failure) when nothing is locked
-  // yet today.
-  try {
-    const tradeDate = getCurrentTradeDateET();
-    const commitmentResult = await getLatestCommitmentForDate(tradeDate);
-    if (commitmentResult.data && commitmentResult.data.status === "LOCKED") {
-      const shadowlistResult = await getOrCreateShadowlistDecisions(commitmentResult.data);
-      if (!shadowlistResult.data) {
-        notes.push(`Shadowlist-Abgleich fehlgeschlagen: ${shadowlistResult.error}`);
-        hadPartialIssue = true;
-      }
-
-      const mtdResult = await syncMtdAutoFreshEntryPct(supabase, commitmentResult.data.id, tradeDate);
-      if (mtdResult.error) {
-        notes.push(mtdResult.error);
-        hadPartialIssue = true;
-      } else if (mtdResult.info) {
-        // Informational only (e.g. "no baseline yet this early in the
-        // app's history") — never flips the sync to "partial".
-        notes.push(mtdResult.info);
-      }
-
-      const lossStreakResult = await syncLossStateAutoCounter(supabase, commitmentResult.data.id, tradeDate);
-      if (lossStreakResult.error) {
-        notes.push(lossStreakResult.error);
-        hadPartialIssue = true;
-      } else if (lossStreakResult.info) {
-        notes.push(lossStreakResult.info);
-      }
-    }
-  } catch (e) {
-    notes.push(e instanceof Error ? e.message : "Shadowlist-Abgleich fehlgeschlagen.");
-    hadPartialIssue = true;
-  }
+  // Shadowlist auto-override + MTD-auto + loss-streak-auto for the
+  // relevant LOCKED commitment, if any — a no-op (not a failure) when
+  // nothing is locked for that date.
+  const postProcessing = await runLockedCommitmentPostProcessing(supabase, getCurrentTradeDateET());
+  notes.push(...postProcessing.notes);
+  if (postProcessing.hadPartialIssue) hadPartialIssue = true;
 
   if (accountResult.snapshots.length > 1) {
     const dates = accountResult.snapshots
@@ -469,6 +490,57 @@ export async function runIbkrSync(): Promise<IbkrSyncSummary> {
     notes,
     error: null,
   };
+}
+
+/**
+ * Shadowlist auto-override + MTD-auto + loss-streak-auto for `tradeDate`'s
+ * LOCKED commitment, if any — a no-op (not a failure) when nothing is
+ * locked for that date. Generalized off a caller-supplied date (rather
+ * than always getCurrentTradeDateET()) so the manual JSON import can run
+ * the exact same post-ingestion pipeline for a backfilled PAST date, not
+ * just "today" — this is the single analysis path both
+ * runIbkrSync and runIbkrJsonImport call after normalization.
+ */
+export async function runLockedCommitmentPostProcessing(
+  supabase: SupabaseAdminClient,
+  tradeDate: string
+): Promise<{ notes: string[]; hadPartialIssue: boolean }> {
+  const notes: string[] = [];
+  let hadPartialIssue = false;
+
+  try {
+    const commitmentResult = await getLatestCommitmentForDate(tradeDate);
+    if (commitmentResult.data && commitmentResult.data.status === "LOCKED") {
+      const shadowlistResult = await getOrCreateShadowlistDecisions(commitmentResult.data);
+      if (!shadowlistResult.data) {
+        notes.push(`Shadowlist-Abgleich fehlgeschlagen: ${shadowlistResult.error}`);
+        hadPartialIssue = true;
+      }
+
+      const mtdResult = await syncMtdAutoFreshEntryPct(supabase, commitmentResult.data.id, tradeDate);
+      if (mtdResult.error) {
+        notes.push(mtdResult.error);
+        hadPartialIssue = true;
+      } else if (mtdResult.info) {
+        // Informational only (e.g. "no baseline yet this early in the
+        // app's history") — never flips the sync to "partial".
+        notes.push(mtdResult.info);
+      }
+
+      const lossStreakResult = await syncLossStateAutoCounter(supabase, commitmentResult.data.id, tradeDate);
+      if (lossStreakResult.error) {
+        notes.push(lossStreakResult.error);
+        hadPartialIssue = true;
+      } else if (lossStreakResult.info) {
+        notes.push(lossStreakResult.info);
+      }
+    }
+  } catch (e) {
+    notes.push(e instanceof Error ? e.message : "Shadowlist-Abgleich fehlgeschlagen.");
+    hadPartialIssue = true;
+  }
+
+  return { notes, hadPartialIssue };
 }
 
 /**
