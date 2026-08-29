@@ -47,6 +47,44 @@ function buildPreview(json: IbkrJsonImport): IbkrJsonImportPreview {
   };
 }
 
+/**
+ * Cross-checks the campaign engine's post-reconciliation state against
+ * the JSON's own `positions[]` — the broker's authoritative EOD
+ * portfolio for exactly this review_date. If a symbol touched by this
+ * import still shows an OPEN campaign but the broker's own EOD snapshot
+ * says it's flat (not in positions[]), the fill-based reconstruction has
+ * drifted from reality (typically: older fills for that symbol are
+ * missing/incomplete in broker_executions, so the running quantity the
+ * campaign engine computed is wrong). Never auto-closes or auto-corrects
+ * it — that would fabricate a price/quantity split with no real fill
+ * backing it — but surfaces it loudly instead of leaving a silently
+ * wrong open campaign, which is what let a phantom SPCX short slip
+ * through.
+ */
+async function checkCampaignEodConsistency(
+  supabase: SupabaseAdminClient,
+  touchedSymbols: string[],
+  eodPositionSymbols: ReadonlySet<string>,
+  reviewDate: string
+): Promise<string[]> {
+  if (touchedSymbols.length === 0) return [];
+
+  const { data: openCampaigns } = await supabase
+    .from("campaigns")
+    .select("symbol")
+    .in("symbol", touchedSymbols)
+    .eq("status", "open");
+
+  const stillOpenSymbols = new Set((openCampaigns ?? []).map((c) => c.symbol as string));
+
+  return Array.from(stillOpenSymbols)
+    .filter((symbol) => !eodPositionSymbols.has(symbol))
+    .map(
+      (symbol) =>
+        `${symbol}: Campaign Engine zeigt eine offene Position, aber der importierte EOD-Snapshot vom ${reviewDate} enthält ${symbol} nicht (Broker meldet flat) — die verlinkten Executions dieser Campaign vermutlich unvollständig (z. B. ältere Fills fehlen), bitte manuell prüfen.`
+    );
+}
+
 /** Any broker_account_snapshots or broker_positions_snapshots row already filed under this trading_date — from either ingestion path. */
 export async function hasExistingIbkrDataForDate(supabase: SupabaseAdminClient, reviewDate: string): Promise<boolean> {
   const [accountRows, positionRows] = await Promise.all([
@@ -160,6 +198,19 @@ export async function runIbkrJsonImport(
       if (priorPositionNotes.length > 0) hadPartialIssue = true;
     } catch (e) {
       notes.push(e instanceof Error ? e.message : "Prüfung auf ungeklärte Altpositionen fehlgeschlagen.");
+      hadPartialIssue = true;
+    }
+  }
+
+  if (executions.length > 0) {
+    try {
+      const eodPositionSymbols = new Set(json.positions.map((p) => p.symbol));
+      const touchedSymbols = Array.from(new Set(executions.map((e) => e.symbol)));
+      const consistencyNotes = await checkCampaignEodConsistency(supabase, touchedSymbols, eodPositionSymbols, reviewDate);
+      notes.push(...consistencyNotes);
+      if (consistencyNotes.length > 0) hadPartialIssue = true;
+    } catch (e) {
+      notes.push(e instanceof Error ? e.message : "EOD-Konsistenzprüfung fehlgeschlagen.");
       hadPartialIssue = true;
     }
   }

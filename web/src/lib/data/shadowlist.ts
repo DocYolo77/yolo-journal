@@ -159,7 +159,7 @@ async function applyIbkrAutoOverride(
       console.error("applyIbkrAutoOverride: audit event failed", auditError);
       return {
         data: null,
-        error: "Shadowlist wurde aktualisiert, aber das Audit-Event konnte nicht gespeichert werden.",
+        error: `Shadowlist wurde aktualisiert, aber das Audit-Event konnte nicht gespeichert werden: ${auditError}`,
       };
     }
 

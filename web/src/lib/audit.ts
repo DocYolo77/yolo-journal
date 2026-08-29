@@ -12,6 +12,20 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 // need a DB-side serialization point (e.g. advisory lock) under real
 // concurrent multi-user load.
 
+/**
+ * Appends the real Postgres error detail instead of swallowing it —
+ * same reasoning/pattern as app/actions.ts's describeSupabaseError: a
+ * generic "Audit-Event konnte nicht gespeichert werden." with the real
+ * cause only in a server log neither the user nor this assistant can
+ * see makes a genuine failure indistinguishable from "nothing to
+ * report."
+ */
+function describeSupabaseError(error: { message?: string; code?: string; details?: string; hint?: string } | null): string {
+  if (!error) return "";
+  const parts = [error.message, error.code ? `Code: ${error.code}` : null, error.details, error.hint].filter(Boolean);
+  return parts.length > 0 ? ` (${parts.join(" · ")})` : "";
+}
+
 export type AuditEventInput = {
   eventType: string;
   tradeDate: string | null;
@@ -55,7 +69,7 @@ export async function appendAuditEvent(
 
     if (lastEventError) {
       console.error("appendAuditEvent: failed to read last event", lastEventError);
-      return { error: "Audit-Event konnte nicht gespeichert werden." };
+      return { error: `Audit-Event konnte nicht gespeichert werden.${describeSupabaseError(lastEventError)}` };
     }
 
     const previousHash = (lastEvent?.hash as string | undefined) ?? null;
@@ -88,12 +102,13 @@ export async function appendAuditEvent(
 
     if (insertError) {
       console.error("appendAuditEvent: failed to insert event", insertError);
-      return { error: "Audit-Event konnte nicht gespeichert werden." };
+      return { error: `Audit-Event konnte nicht gespeichert werden.${describeSupabaseError(insertError)}` };
     }
 
     return { error: null };
   } catch (e) {
     console.error("appendAuditEvent failed", e);
-    return { error: "Audit-Event konnte nicht gespeichert werden." };
+    const detail = e instanceof Error ? ` (${e.message})` : "";
+    return { error: `Audit-Event konnte nicht gespeichert werden.${detail}` };
   }
 }

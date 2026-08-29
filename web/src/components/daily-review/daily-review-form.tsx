@@ -61,6 +61,7 @@ export function DailyReviewForm({
   suggestedTickers,
   portfolio,
   portfolioCapturedAt,
+  portfolioSource,
   dailyPnlSnapshot,
   campaigns,
   chartSvgByTicker,
@@ -72,6 +73,8 @@ export function DailyReviewForm({
   suggestedTickers: string[];
   portfolio: PortfolioPosition[];
   portfolioCapturedAt: string | null;
+  /** From the same broker_account_snapshots row this day's NLV/P&L came from — the two are always written together in one ingestion event. */
+  portfolioSource: string | null;
   dailyPnlSnapshot: DailyPnlSnapshot | null;
   campaigns: DailyReportCampaign[];
   chartSvgByTicker: Record<string, TickerChartSvgPair>;
@@ -283,7 +286,12 @@ export function DailyReviewForm({
             </table>
             {portfolioCapturedAt ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Stand: {formatDateTime(portfolioCapturedAt)} (letzter IBKR-Sync — unabhängig vom Review-Datum)
+                Stand: {formatDateTime(portfolioCapturedAt)}
+                {portfolioSource === "manual_json_import"
+                  ? " — Manual IBKR JSON Import"
+                  : portfolioSource === "ibkr_flex_sync"
+                    ? " — IBKR Sync"
+                    : ""}
               </p>
             ) : null}
           </div>

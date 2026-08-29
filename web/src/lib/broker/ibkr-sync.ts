@@ -328,14 +328,21 @@ export async function checkUnresolvedPriorPositions(supabase: SupabaseAdminClien
   );
 }
 
+// Postgres unique_violation — see insertAccountAndPositionSnapshots below.
+const POSTGRES_UNIQUE_VIOLATION = "23505";
+
 /**
- * Inserts account/position snapshot rows. Upsert (not plain insert) on
- * each table's natural unique key — a no-op behavior change for the Flex
- * path (captured_at = "now" there is always fresh, so it never
- * conflicts) but what makes the manual JSON import idempotent (§10):
- * re-importing the same file reuses the JSON's own snapshot_datetime as
- * captured_at, so a repeat import replaces the same row instead of
- * erroring or piling up duplicates.
+ * Inserts account/position snapshot rows. Plain insert, matching these
+ * tables' actual grants (service_role only ever got `insert`, never
+ * `update` — see 20260813180619_create_market_data_and_broker_schema.sql
+ * — so an upsert's implicit ON CONFLICT DO UPDATE fails with "permission
+ * denied", which is exactly what re-importing the same JSON file hit in
+ * production). A unique_violation (23505) on a re-import of the exact
+ * same file (same captured_at, from the JSON's own snapshot_datetime) is
+ * therefore treated as an idempotent no-op rather than an error — the
+ * row's already there, nothing lost — instead of trying to grant these
+ * append-only-by-design tables an UPDATE privilege they were
+ * deliberately never given.
  *
  * Shared by both ingestion paths, same reasoning as insertNewExecutions
  * above.
@@ -346,16 +353,16 @@ export async function insertAccountAndPositionSnapshots(
   positions: NormalizedFlexPosition[]
 ): Promise<{ error: string | null }> {
   if (snapshots.length > 0) {
-    const { error: snapshotError } = await supabase
-      .from("broker_account_snapshots")
-      .upsert(snapshots, { onConflict: "provider,provider_account_id,trading_date,captured_at" });
-    if (snapshotError) return { error: `Account-Snapshot-Insert fehlgeschlagen: ${snapshotError.message}` };
+    const { error: snapshotError } = await supabase.from("broker_account_snapshots").insert(snapshots);
+    if (snapshotError && snapshotError.code !== POSTGRES_UNIQUE_VIOLATION) {
+      return { error: `Account-Snapshot-Insert fehlgeschlagen: ${snapshotError.message}` };
+    }
   }
   if (positions.length > 0) {
-    const { error: positionsError } = await supabase
-      .from("broker_positions_snapshots")
-      .upsert(positions, { onConflict: "provider,provider_account_id,provider_contract_id,trading_date,captured_at" });
-    if (positionsError) return { error: `Positions-Insert fehlgeschlagen: ${positionsError.message}` };
+    const { error: positionsError } = await supabase.from("broker_positions_snapshots").insert(positions);
+    if (positionsError && positionsError.code !== POSTGRES_UNIQUE_VIOLATION) {
+      return { error: `Positions-Insert fehlgeschlagen: ${positionsError.message}` };
+    }
   }
   return { error: null };
 }

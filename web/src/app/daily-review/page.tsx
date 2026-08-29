@@ -8,7 +8,7 @@ import {
   getReportSnapshot,
   getTickerChartDataForReview,
 } from "@/lib/data/report-snapshot";
-import { getDailyPnlSnapshotForDate, getLatestPortfolioPositions } from "@/lib/data/portfolio";
+import { getDailyPnlSnapshotForDate, getPortfolioSnapshotForDate } from "@/lib/data/portfolio";
 import { getCurrentTradeDateET, isValidTradeDate, shiftTradeDate } from "@/lib/trade-date";
 import { renderDailyChartSvg, renderIntradayChartSvg } from "@/lib/charts/svg-chart";
 import type { TickerChartSvgPair } from "@/components/daily-review/daily-review-form";
@@ -47,10 +47,16 @@ export default async function DailyReviewPage({
     </div>
   );
 
-  const [contextResult, snapshotResult, portfolioResult, dailyPnlResult, campaigns] = await Promise.all([
+  const [contextResult, snapshotResult, portfolioSnapshot, dailyPnlResult, campaigns] = await Promise.all([
     getDailyReviewContext(tradeDate),
     getReportSnapshot(tradeDate),
-    getLatestPortfolioPositions(),
+    // Date-scoped, not "whatever synced most recently globally" — a
+    // backfilled past Daily Review must show that day's own EOD
+    // portfolio (matches finalizeDailyReview's already-established
+    // convention in lib/data/report-snapshot.ts), otherwise a position
+    // already closed by that day's EOD can still show up as "open" just
+    // because it happens to be in the current live account.
+    getPortfolioSnapshotForDate(tradeDate),
     getDailyPnlSnapshotForDate(tradeDate),
     getCampaignsForReview(tradeDate),
   ]);
@@ -87,7 +93,7 @@ export default async function DailyReviewPage({
         new Set([
           ...(review?.ticker_reviews.map((t) => t.ticker) ?? []),
           ...suggestedTickers,
-          ...(portfolioResult.data?.positions.map((p) => p.symbol) ?? []),
+          ...portfolioSnapshot.positions.map((p) => p.symbol),
         ])
       );
 
@@ -153,8 +159,9 @@ export default async function DailyReviewPage({
             tradeDate={tradeDate}
             review={review}
             suggestedTickers={suggestedTickers}
-            portfolio={portfolioResult.data?.positions ?? []}
-            portfolioCapturedAt={portfolioResult.data?.capturedAt ?? null}
+            portfolio={portfolioSnapshot.positions}
+            portfolioCapturedAt={portfolioSnapshot.capturedAt}
+            portfolioSource={dailyPnlResult.data?.source ?? null}
             dailyPnlSnapshot={dailyPnlResult.data ?? null}
             campaigns={campaigns}
             chartSvgByTicker={chartSvgByTicker}
