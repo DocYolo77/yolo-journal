@@ -51,6 +51,9 @@ export const SHADOW_TEXTS = {
   tradeStopLogic: "Wo lag der Anker und wie weit war er entfernt? War der Stop erreichbar oder konstruiert?",
   tradeWhatHappened:
     "Verlauf ohne Bewertung. Traktion sofort, Rücksetzer, Stop, Re-Add? Wie sah die Schlusskerze aus?",
+  tradeManagement:
+    "Stop nachgezogen, Partial, Add, Teil-Exit? Wenn nichts passiert ist: warum nicht — bewusst gehalten oder nicht hingesehen? Bei Partials und späten Adds: Was war der Grund, nicht nur der Preis?",
+  tradeStopNow: "Nur bei Änderung ausfüllen. Wo liegt der Stop nach Handelsschluss? Leer heißt unverändert.",
   tradeMyThinking:
     "Warum dieser Trade, warum diese Größe, warum hältst du ihn — oder warum nicht? Was hättest du getan, wenn es sofort gegen dich gelaufen wäre?",
   whatWentWell: "Nicht nur Ergebnisse — auch Dinge, die du gelassen hast. Welche Regel hat gehalten, obwohl sie unbequem war?",
@@ -62,6 +65,8 @@ export const SHADOW_TEXTS = {
   watchlistNext: "Welche Namen sind reif — und in welche Richtung? Was steht schon in Position und braucht morgen eine Entscheidung?",
   nextSessionPlan:
     "Stärke oder Rücksetzer? Wo willst du aggressiv sein, wo gar nicht? Welche Taktik pro Name, und was muss passieren, damit du NICHT klickst? Was ist heute liegengeblieben, das morgen zuerst drankommt?",
+  opportunitySpike:
+    "Welche Gruppe, welches Setup, welche frische Traktion würden morgen mehr Risk rechtfertigen? Eine Zeile genügt. Wenn nichts davon eintritt: Standard-Risk. Bedingung vorher aufschreiben, nicht hinterher begründen.",
 } as const;
 
 /** Uppercase-trims a ticker input. Empty string means "not a valid ticker". */

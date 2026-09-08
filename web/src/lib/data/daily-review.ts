@@ -186,6 +186,7 @@ export type DailyReviewFieldPatch = Partial<
     | "what_to_improve"
     | "guardrails_note"
     | "next_session_plan"
+    | "opportunity_spike"
   >
 >;
 
@@ -303,7 +304,12 @@ export async function addTradeCard(
 
 export async function updateTradeCard(
   id: string,
-  patch: Partial<Pick<DailyReviewTradeRow, "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "my_thinking">>
+  patch: Partial<
+    Pick<
+      DailyReviewTradeRow,
+      "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "management" | "stop_now" | "my_thinking"
+    >
+  >
 ): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
@@ -339,13 +345,13 @@ export async function setGuardrailStatus(
   reviewId: string,
   guardrailKey: string,
   status: DailyReviewGuardrailStatus,
-  notes: string | null
+  note: string | null
 ): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
     const { error } = await supabase
       .from("daily_review_guardrails")
-      .upsert({ review_id: reviewId, guardrail_key: guardrailKey, status, notes }, { onConflict: "review_id,guardrail_key" });
+      .upsert({ review_id: reviewId, guardrail_key: guardrailKey, status, note }, { onConflict: "review_id,guardrail_key" });
     if (error) {
       console.error("setGuardrailStatus failed", error);
       return { error: "Guardrail konnte nicht gespeichert werden." };
@@ -446,6 +452,8 @@ export function buildMarkdownExport(data: DailyReviewData): string {
       if (t.trigger_tactic) lines.push(`- Trigger / Taktik: ${t.trigger_tactic}`);
       if (t.stop_logic) lines.push(`- Stop-Logik: ${t.stop_logic}`);
       if (t.what_happened) lines.push(`- Verlauf: ${t.what_happened}`);
+      if (t.management) lines.push(`- Management heute: ${t.management}`);
+      if (t.stop_now) lines.push(`- Stop jetzt: ${t.stop_now}`);
       if (t.my_thinking) lines.push(`- Meine Denke: ${t.my_thinking}`);
     }
   }
@@ -460,7 +468,7 @@ export function buildMarkdownExport(data: DailyReviewData): string {
   const guardrailLines = guardrails.map((g) => {
     const label = DAILY_REVIEW_GUARDRAILS.find((d) => d.key === g.guardrail_key)?.label ?? g.guardrail_key;
     const statusLabel = GUARDRAIL_STATUS_LABELS[g.status];
-    const noteSuffix = g.notes ? ` — ${g.notes}` : "";
+    const noteSuffix = g.note ? ` — ${g.note}` : "";
     return `- ${label}: ${statusLabel}${noteSuffix}`;
   });
   if (guardrailLines.length > 0 || review.guardrails_note) {
@@ -470,6 +478,7 @@ export function buildMarkdownExport(data: DailyReviewData): string {
 
   const nextLines: string[] = [];
   if (watchlistNext.length > 0) nextLines.push(`- Watchlist: ${watchlistNext.map((w) => w.ticker).join(", ")}`);
+  if (review.opportunity_spike) nextLines.push(`- Opportunity Spike: ${review.opportunity_spike}`);
   if (review.next_session_plan) nextLines.push(review.next_session_plan);
   if (nextLines.length > 0) lines.push("## Plan für die nächste Session", ...nextLines);
 

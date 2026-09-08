@@ -117,6 +117,8 @@ export function DailyReviewPdfDocument({
                   {t.trigger_tactic ? <Text style={styles.paragraph}>Trigger / Taktik: {t.trigger_tactic}</Text> : null}
                   {t.stop_logic ? <Text style={styles.paragraph}>Stop-Logik: {t.stop_logic}</Text> : null}
                   {t.what_happened ? <Text style={styles.paragraph}>Verlauf: {t.what_happened}</Text> : null}
+                  {t.management ? <Text style={styles.paragraph}>Management heute: {t.management}</Text> : null}
+                  {t.stop_now ? <Text style={styles.paragraph}>Stop jetzt: {t.stop_now}</Text> : null}
                   {t.my_thinking ? <Text style={styles.paragraph}>Meine Denke: {t.my_thinking}</Text> : null}
                 </View>
               ))}
@@ -176,7 +178,7 @@ export function DailyReviewPdfDocument({
                 <DetailRow
                   key={g.id}
                   label={label}
-                  value={`${GUARDRAIL_STATUS_LABELS[g.status]}${g.notes ? ` — ${g.notes}` : ""}`}
+                  value={`${GUARDRAIL_STATUS_LABELS[g.status]}${g.note ? ` — ${g.note}` : ""}`}
                 />
               );
             })}
@@ -184,11 +186,12 @@ export function DailyReviewPdfDocument({
           </Section>
         ) : null}
 
-        {watchlistNext.length > 0 || review.next_session_plan ? (
+        {watchlistNext.length > 0 || review.next_session_plan || review.opportunity_spike ? (
           <Section title="Plan für die nächste Session">
             {watchlistNext.length > 0 ? (
               <DetailRow label="Watchlist" value={watchlistNext.map((w) => w.ticker).join(", ")} />
             ) : null}
+            {review.opportunity_spike ? <DetailRow label="Opportunity Spike" value={review.opportunity_spike} /> : null}
             {review.next_session_plan ? <Text style={styles.paragraph}>{review.next_session_plan}</Text> : null}
           </Section>
         ) : null}

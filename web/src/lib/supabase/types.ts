@@ -180,6 +180,8 @@ export type DailyReviewRow = {
   guardrails_note: string | null;
 
   next_session_plan: string | null;
+  /** Pre-declared condition for taking more than standard risk tomorrow — written before the fact, not justified after. */
+  opportunity_spike: string | null;
 
   created_at: string;
   updated_at: string;
@@ -202,6 +204,9 @@ export type DailyReviewWatchlistRow = {
   updated_at: string;
 };
 
+// "Ticker-Karten" — one card per ticker touched today, entry and/or
+// management of an existing position (never a separate card type for
+// each), see CLAUDE.md.
 export type DailyReviewTradeRow = {
   id: string;
   user_id: string | null;
@@ -213,6 +218,10 @@ export type DailyReviewTradeRow = {
   trigger_tactic: string | null;
   stop_logic: string | null;
   what_happened: string | null;
+  /** "Management heute" — stop nachgezogen, Partial, Add, Exit. */
+  management: string | null;
+  /** "Stop jetzt" — change-only: empty means "unverändert", not "kein Stop". */
+  stop_now: string | null;
   my_thinking: string | null;
 
   created_at: string;
@@ -228,7 +237,7 @@ export type DailyReviewGuardrailRow = {
 
   guardrail_key: string;
   status: DailyReviewGuardrailStatus;
-  notes: string | null;
+  note: string | null;
 
   created_at: string;
   updated_at: string;

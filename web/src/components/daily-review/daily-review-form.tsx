@@ -234,7 +234,7 @@ function TradeCard({
   const { reportSaving, reportDone } = useReportSave();
   const timersRef = useRef<Partial<Record<string, ReturnType<typeof setTimeout>>>>({});
 
-  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "my_thinking";
+  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "management" | "stop_now" | "my_thinking";
 
   const handleFieldChange = useCallback(
     (field: TradeField, value: string) => {
@@ -256,6 +256,8 @@ function TradeCard({
   const triggerHandler = useCallback((value: string) => handleFieldChange("trigger_tactic", value), [handleFieldChange]);
   const stopHandler = useCallback((value: string) => handleFieldChange("stop_logic", value), [handleFieldChange]);
   const whatHappenedHandler = useCallback((value: string) => handleFieldChange("what_happened", value), [handleFieldChange]);
+  const managementHandler = useCallback((value: string) => handleFieldChange("management", value), [handleFieldChange]);
+  const stopNowHandler = useCallback((value: string) => handleFieldChange("stop_now", value), [handleFieldChange]);
   const myThinkingHandler = useCallback((value: string) => handleFieldChange("my_thinking", value), [handleFieldChange]);
 
   return (
@@ -321,6 +323,19 @@ function TradeCard({
         <ShadowTextarea value={trade.what_happened ?? ""} onChange={whatHappenedHandler} placeholder={SHADOW_TEXTS.tradeWhatHappened} />
       </Field>
 
+      <Field label="Management heute">
+        <ShadowTextarea value={trade.management ?? ""} onChange={managementHandler} placeholder={SHADOW_TEXTS.tradeManagement} rows={2} />
+      </Field>
+
+      <Field label="Stop jetzt">
+        <input
+          defaultValue={trade.stop_now ?? ""}
+          onChange={(e) => stopNowHandler(e.target.value)}
+          placeholder={SHADOW_TEXTS.tradeStopNow}
+          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
+        />
+      </Field>
+
       <Field label="Meine Denke">
         <ShadowTextarea value={trade.my_thinking ?? ""} onChange={myThinkingHandler} placeholder={SHADOW_TEXTS.tradeMyThinking} />
       </Field>
@@ -341,8 +356,8 @@ function GuardrailRow({
 }) {
   const { reportSaving, reportDone } = useReportSave();
   const [status, setStatus] = useState<DailyReviewGuardrailStatus | null>(current?.status ?? null);
-  const [note, setNote] = useState(current?.notes ?? "");
-  const [noteOpen, setNoteOpen] = useState(Boolean(current?.notes));
+  const [note, setNote] = useState(current?.note ?? "");
+  const [noteOpen, setNoteOpen] = useState(Boolean(current?.note));
   const noteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleClick(next: DailyReviewGuardrailStatus) {
@@ -516,6 +531,11 @@ export function DailyReviewForm({
     (value) => saveField({ next_session_plan: value || null }),
     contextValue
   );
+  const [opportunitySpike, onOpportunitySpikeChange] = useAutosaveTextWithContext(
+    review.opportunity_spike ?? "",
+    (value) => saveField({ opportunity_spike: value || null }),
+    contextValue
+  );
 
   function handleAddTradeCard() {
     startTransition(async () => {
@@ -622,7 +642,7 @@ export function DailyReviewForm({
           </Field>
         </Block>
 
-        <Block title="4 · Trades">
+        <Block title="4 · Ticker-Karten">
           <div className="space-y-3">
             {trades.map((trade) => (
               <TradeCard
@@ -639,7 +659,7 @@ export function DailyReviewForm({
             onClick={handleAddTradeCard}
             className="rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-accent hover:text-accent"
           >
-            + Trade
+            + Ticker
           </button>
         </Block>
 
@@ -691,6 +711,14 @@ export function DailyReviewForm({
           </Field>
           <Field label="Plan für die morgige Session">
             <ShadowTextarea value={nextSessionPlan} onChange={onNextSessionPlanChange} placeholder={SHADOW_TEXTS.nextSessionPlan} rows={5} />
+          </Field>
+          <Field label="Opportunity Spike">
+            <ShadowTextarea
+              value={opportunitySpike}
+              onChange={onOpportunitySpikeChange}
+              placeholder={SHADOW_TEXTS.opportunitySpike}
+              rows={2}
+            />
           </Field>
         </Block>
 
