@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "yolo-journal",
-  description: "Journal OS — Pre-Market Commitment, Shadowlist & Review",
+  description: "Journal OS — Daily Review, Shadowlist & Weekly Review",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

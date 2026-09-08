@@ -1,104 +1,124 @@
 # CLAUDE.md — yolo-journal
 
-## STOP: corrected product definition
+## Product direction: v2 — a capture tool, not an analysis tool
 
-The previous generic Trading Journal specification was wrong.
+As of 2026-09-08 this repository implements the **"Umbau-Anweisung v2"** rewrite, which
+supersedes the earlier Journal OS V7.4.3 web-migration spec (`LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md`
+is now historical background only — do not treat it as the current target).
 
-This repository is a web migration of the user's existing **Journal OS V7.4.3**.
+**Goal:** the Daily Review page stores inputs, renders charts, and produces exports. It does
+not judge, does not enforce rules, and does not compute derived metrics.
 
-Read `LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md` in full before making further product changes. It is the canonical functional reference derived from the user's actual legacy codebase.
+> Wenn ein Feld auf eine Auswertung wartet, die die Seite nicht liefern kann, gehört es nicht
+> ins Formular. (If a field is waiting on an evaluation the page can't deliver, it doesn't
+> belong in the form.)
 
-## Core workflow
+The judgment/analysis that the old Commitment/Lock/IBKR-reconcile system used to attempt now
+happens in an LLM chat, fed by the Daily Review's Markdown export plus live broker/market data
+pulled at chat time. Do not re-add broker reconstruction, R-calculation, guardrail enforcement,
+sizing control, traction analysis, portfolio EMA10, index-extension warnings, coach-fazit, or
+process notes to the app itself — that is deliberately out of scope now.
 
-Build around:
+## Core workflow (current)
 
-**Pre-Market Commitment → Lock → Shadowlist / Focus Audit → IBKR Reconcile → Daily Review → Weekly Review → Monthly Review → Archive / Rules Timeline**
+**Daily Review (single page, always editable) → Shadowlist (decoupled) → Markdown export
+("Für Claude kopieren") / PDF export**
 
-Do not center the product around generic Trades / Accounts / Strategies CRUD.
+Weekly Review and the Archive are still live but were deliberately left untouched by the v2
+rewrite (see "Weekly Review is out of scope" below) — they will get their own separate rework
+later. Monthly Review and Rules & Timeline remain unbuilt placeholders, same as before.
 
-## Existing work
+## What was removed in v2 (do not re-add without a fresh product decision)
 
-Audit everything already built from the incorrect generic specification.
+- The Pre-Market Commitment workflow: the form, versioned revisions, DRAFT/LOCKED status,
+  lock semantics, "risk can only decrease after lock," the risk-reduction workflow.
+- Both IBKR ingestion paths: the Flex Web Service sync and the manual JSON import, plus the
+  campaign-reconciliation engine, EOD-consistency checks, and reversal-flagging.
+- `audit_events` — the hash-chained event ledger. It never successfully wrote a row in
+  production; immutability now comes from the exported PDF, not a log.
+- The old finalized-report system (`daily_report_snapshots`-backed, one row per trade_date,
+  DRAFT/FINAL). A Daily Review is now always editable; there is no separate "final" state.
+- The old Shadowlist decision model (list_type/decision/reason enums, commitment-linked,
+  IBKR auto-override). Shadowlist is now a `taken` boolean + optional note directly on the
+  review's own watchlist row — no separate table, no auto-override (there's no broker data
+  left to auto-override from).
 
-Classify it as:
+## Current data model
 
-- **KEEP** — technically and functionally useful for the real Journal OS
-- **REPURPOSE** — useful implementation but wrong product framing
-- **SCRAP** — only exists because of the wrong generic roadmap
+One main table plus three child tables (all under `daily_reviews`'s new v2 shape — see
+`supabase/migrations/20260908000000_v2_capture_tool_rewrite.sql` for the authoritative
+definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
 
-Do not preserve incorrect UI or architecture merely because coding time has already been spent on it.
+- `daily_reviews` — one row per `trade_date`, every field but `trade_date` optional.
+- `daily_review_watchlist` — ticker chips, `scope` `'today'` or `'next'`, carries `taken`
+  and `note` directly (this **is** the Shadowlist's data source — there is no separate
+  shadowlist table).
+- `daily_review_trades` — repeatable trade cards, all free text, no enums.
+- `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
+  not "held."
 
-## Technical base to keep
+**Weekly Review is out of scope for v2 and reads a separate, older data shape on purpose:**
+`lib/weekly-review/{fetch,compute}.ts` still query `commitments`, `campaigns`,
+`campaign_executions`, `broker_executions`, `broker_account_snapshots`,
+`broker_positions_snapshots`, `daily_report_snapshots` (all still present, untouched, in the
+database — the v2 spec's literal "drop everything" instruction was overridden for these
+specific tables precisely because Weekly Review needs them) and the renamed
+`daily_reviews_legacy` / `shadowlist_decisions_legacy` tables (pure renames of the pre-v2
+`daily_reviews` / `shadowlist_decisions` tables — same data, same shape, only the table name
+changed so the clean names were free for the new v2 schema). **Do not touch any of these eight
+tables, or `lib/weekly-review/*`, `lib/campaigns/realized-pnl.ts`, or
+`lib/weekly-review/legacy-guardrails.ts`, without first re-deciding Weekly Review's own rework
+as its own explicit task.** They are dead weight from the Daily Review's perspective but load-
+bearing for Weekly Review.
+
+## Product invariants (v2)
+
+- Every field except `trade_date` is optional. Empty fields never appear in exports.
+- Autosave per field on an ~800ms debounce. No submit button, no required-field validation
+  gate, one shared save-status indicator.
+- Setup / Trigger-Taktik / Stop-Logik on trade cards are free text with autocomplete from the
+  user's own history — never a dropdown or enum. Setup vocabulary changes faster than any
+  enum could track.
+- Shadow-text placeholders (the exact German prompts in `lib/validation/daily-review.ts`'s
+  `SHADOW_TEXTS`) are prompts, not labels — they vanish on typing and are never persisted.
+  Don't paraphrase them if you touch this file; the wording is deliberate.
+- Guardrails are a fixed nine-key click-list, four states (Eingehalten / Verletzt / Bewusster
+  Override / n. a.), default empty. This is documentation, not enforcement — nothing is
+  blocked, nothing is validated, no note is derived from a status.
+- The watchlist-for-tomorrow (`scope='next'`) gets copied forward as tomorrow's
+  watchlist-for-today when that review is first opened — a copy, not a link, so editing one
+  list never touches the other. The prior day's plan shows as a read-only hint above Gameplan,
+  never as an editable field.
+- The Markdown export ("Für Claude kopieren") is the most important output of the page: fixed
+  section order, empty fields/sections omitted entirely, no interpretation or summarization.
+  Treat any change to its format as a breaking change to something else (an LLM chat) that
+  depends on it staying stable week to week.
+- The PDF export is the archive/snapshot mechanism now — there is no separate finalized
+  snapshot row. Filename convention: `Daily_Review_YYYY-MM-DD.pdf`.
+- `nlv_close` is optional by design — the value is meant to be pulled live from the broker in
+  the LLM chat, not hand-typed here.
+
+## Technical base
 
 - Next.js under `web/`
-- Supabase
-- server-side Supabase access
+- Supabase, server-side access only (never import the secret-key client into Client Components)
 - `.env.local` remains local and uncommitted
-- existing migration history remains immutable
-- local health check was already proven: `{"ok":true,"trades":0}`
-
-Your cloud/browser environment does not have the local secrets. Do not interpret that as a broken integration.
+- Hand-written types in `web/src/lib/supabase/types.ts` — no ORM/codegen, keep in sync
+  manually whenever a migration changes a table
+- Your cloud/browser environment does not have the local secrets; that is expected, not a
+  broken integration
 
 ## Database rule
 
-Do NOT alter existing migration files.
+Do NOT alter existing migration files — new schema changes are always a new migration file,
+never an edit to a committed one. Before dropping or restructuring any table:
 
-Before adding Journal-OS migrations:
-
-1. inspect current schema and current implementation
-2. read `LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md`
-3. propose a relational mapping of the legacy data model
-4. classify current tables as KEEP / REPURPOSE / DEPRECATE / NEW
-5. show the proposal before applying destructive schema changes
-
-## Product invariants
-
-Must preserve:
-
-- seven-section Pre-Market Commitment
-- versioned commitment revisions
-- irreversible lock semantics
-- after lock, intraday risk can only decrease
-- locked watchlist / EP candidates / hard rules cannot silently change
-- max 3 traded tickers as a process guardrail
-- Prime / Watchlist / Secondary source
-- Shadowlist as a first-class stock-selection audit
-- taken vs not taken
-- M5 / M15 / M30 shadow model
-- M30 committed focus audit
-- strict trigger after completed opening range
-- IBKR fills grouped into economic campaigns rather than treating clicks as trades
-- old positions separated from same-day campaigns
-- Daily Review against the locked premarket plan
-- Selection / Execution / Management evaluated separately
-- persistent loser/risk state
-- guardrails
-- mental status without invented psychological diagnoses
-- Weekly Review
-- Monthly Review
-- archive and append-only audit timeline
-
-## Immediate next action
-
-Do not immediately continue coding.
-
-First respond with:
-
-### A. Current implementation audit
-- KEEP
-- REPURPOSE
-- SCRAP
-
-### B. Gap analysis against Journal OS V7.4.3
-
-### C. Proposed target information architecture
-
-### D. Proposed Supabase schema mapping
-No migrations yet.
-
-### E. Smallest safe next implementation phase
-
-Only after the product/model audit is coherent should implementation resume.
+1. Check whether Weekly Review (`lib/weekly-review/*`) reads it, directly or through
+   `lib/campaigns/realized-pnl.ts`. If it does, do not drop or reshape it without first
+   reconciling that dependency (rename-and-recreate under the old name, same as the v2
+   migration did, is usually the right move rather than breaking Weekly Review).
+2. Show the proposal before applying destructive schema changes.
+3. Back up affected data first if it's non-trivial and irreversible.
 
 ## Safety
 
@@ -109,10 +129,15 @@ Never:
 - import the secret-key client into Client Components
 - log secrets
 - rewrite migration history
-- silently overwrite locked historical decisions
+- silently overwrite locked historical decisions (there is no more "locked" concept in v2,
+  but this still applies to Weekly Review's `weekly_reviews`/`weekly_report_snapshots`
+  FINAL state)
 
 ## Working principle
 
 > Reproduce the real Journal OS first. Improve it later.
 
-Do not invent a new product.
+This principle guided the original V7.4.3 migration. It has been superseded for the Daily
+Review by the v2 capture-tool direction above — do not resurrect the old Commitment/Lock/
+IBKR-reconcile invariants there. It still applies, unchanged, to Weekly Review and Monthly
+Review until they get their own explicit rework.
