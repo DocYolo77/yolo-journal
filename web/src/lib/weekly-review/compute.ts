@@ -6,7 +6,7 @@
 // ("nicht verfügbar") rather than a guess, per the spec's explicit
 // instruction.
 
-import { CANONICAL_GUARDRAILS } from "@/lib/validation/daily-review";
+import { CANONICAL_GUARDRAILS } from "@/lib/weekly-review/legacy-guardrails";
 import { computeCampaignRealizedPnl } from "@/lib/campaigns/realized-pnl";
 import type {
   CampaignRow,

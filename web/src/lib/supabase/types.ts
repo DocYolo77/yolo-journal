@@ -134,7 +134,11 @@ export type AuditEventRow = {
   created_at: string;
 };
 
-export type ShadowlistDecisionRow = {
+// Renamed from ShadowlistDecisionRow when the v2 rewrite repurposed
+// that clean name for the simplified capture-tool shape below —
+// describes the shadowlist_decisions_legacy table (renamed from
+// shadowlist_decisions, same shape/data), kept for Weekly Review only.
+export type ShadowlistDecisionLegacyRow = {
   id: string;
   user_id: string | null;
   commitment_id: string;
@@ -145,6 +149,22 @@ export type ShadowlistDecisionRow = {
   decision: "Genommen" | "Nicht genommen";
   reason: string | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// 20260908000000_v2_capture_tool_rewrite.sql — decoupled from the
+// abolished Commitment. Ticker source is the review's own
+// daily_review_watchlist (scope='today'); no more list_type/decision/
+// reason enums, no auto-override (no broker data to auto-override from).
+export type ShadowlistDecisionRow = {
+  id: string;
+  user_id: string | null;
+  review_id: string;
+  trade_date: string;
+  ticker: string;
+  taken: boolean;
+  note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -206,7 +226,13 @@ export type ManualPortfolioPosition = {
   currency: string | null;
 };
 
-export type DailyReviewRow = {
+// Renamed from DailyReviewRow when the v2 rewrite repurposed that clean
+// name for the new capture-tool schema (see below) — this describes the
+// daily_reviews_legacy table (renamed from daily_reviews, same shape,
+// same data), kept only because lib/weekly-review/{fetch,compute}.ts
+// still read the pre-v2 shape directly and Weekly/Monthly are
+// deliberately out of scope for the v2 rewrite.
+export type DailyReviewLegacyRow = {
   id: string;
   user_id: string | null;
 
@@ -245,6 +271,88 @@ export type DailyReviewRow = {
   shadowlist_comment: string | null;
 
   ticker_reviews: TickerReview[];
+
+  created_at: string;
+  updated_at: string;
+};
+
+// 20260908000000_v2_capture_tool_rewrite.sql — the new capture-tool
+// Daily Review. One row per trade_date, always editable, every field
+// but trade_date optional. See CLAUDE.md for the product rationale.
+
+export type DailyReviewRow = {
+  id: string;
+  user_id: string | null;
+
+  trade_date: string;
+
+  risk_pct: number | null;
+  r_value_usd: number | null;
+  /** Optional — the value now gets pulled live from the broker in the LLM chat instead of being hand-typed here. */
+  nlv_close: number | null;
+  self_grade: string | null;
+
+  market_context: string | null;
+  personal_state: string | null;
+  /** Half-steps are a real input (3.5 has occurred). */
+  focus_level: number | null;
+  gameplan: string | null;
+
+  what_went_well: string | null;
+  what_went_wrong: string | null;
+  what_to_improve: string | null;
+  guardrails_note: string | null;
+
+  next_session_plan: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyReviewWatchlistScope = "today" | "next";
+
+export type DailyReviewWatchlistRow = {
+  id: string;
+  user_id: string | null;
+  review_id: string;
+
+  scope: DailyReviewWatchlistScope;
+  ticker: string;
+  sort_order: number;
+  taken: boolean;
+  notes: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyReviewTradeRow = {
+  id: string;
+  user_id: string | null;
+  review_id: string;
+
+  sort_order: number;
+  ticker: string;
+  setup: string | null;
+  trigger_tactic: string | null;
+  stop_logic: string | null;
+  what_happened: string | null;
+  my_thinking: string | null;
+
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyReviewGuardrailStatus = "held" | "broken" | "na" | "override";
+
+export type DailyReviewGuardrailRow = {
+  id: string;
+  user_id: string | null;
+  review_id: string;
+
+  guardrail_key: string;
+  status: DailyReviewGuardrailStatus;
+  notes: string | null;
 
   created_at: string;
   updated_at: string;

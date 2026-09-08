@@ -7,7 +7,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getDailyChartSeries } from "@/lib/market-data/chart-data";
 import { fetchFillsForCampaigns, type CampaignFill } from "@/lib/campaigns/realized-pnl";
-import type { CampaignRow, ChartSeriesPoint, DailyReviewRow, ShadowlistDecisionRow } from "@/lib/supabase/types";
+import type { CampaignRow, ChartSeriesPoint, DailyReviewLegacyRow, ShadowlistDecisionLegacyRow } from "@/lib/supabase/types";
 
 export type { CampaignFill };
 
@@ -25,7 +25,7 @@ export type PositionsUnrealizedTotal = {
 export type WeeklyRawData = {
   weekStart: string;
   weekEnd: string;
-  dailyReviews: DailyReviewRow[];
+  dailyReviews: DailyReviewLegacyRow[];
   /** Latest revision per trade_date, LOCKED only — a DRAFT commitment is never a real plan (same rule as everywhere else in this app). */
   lockedCommitments: {
     trade_date: string;
@@ -37,7 +37,7 @@ export type WeeklyRawData = {
     loss_state_reduced_size_mode: boolean;
     loss_state_review_trigger_reached: boolean;
   }[];
-  shadowlistDecisions: ShadowlistDecisionRow[];
+  shadowlistDecisions: ShadowlistDecisionLegacyRow[];
   campaigns: CampaignRow[];
   /** campaign_id -> its linked fills, ascending by executed_at. */
   fillsByCampaignId: Map<string, CampaignFill[]>;
@@ -62,7 +62,7 @@ export async function fetchWeeklyRawData(weekStart: string, weekEnd: string): Pr
     { data: positionsBeforeWeekRows },
     indexContext,
   ] = await Promise.all([
-    supabase.from("daily_reviews").select("*").gte("trade_date", weekStart).lte("trade_date", weekEnd).order("trade_date"),
+    supabase.from("daily_reviews_legacy").select("*").gte("trade_date", weekStart).lte("trade_date", weekEnd).order("trade_date"),
     supabase
       .from("commitments")
       .select(
@@ -72,7 +72,7 @@ export async function fetchWeeklyRawData(weekStart: string, weekEnd: string): Pr
       .lte("trade_date", weekEnd)
       .order("trade_date")
       .order("revision", { ascending: false }),
-    supabase.from("shadowlist_decisions").select("*").gte("trade_date", weekStart).lte("trade_date", weekEnd),
+    supabase.from("shadowlist_decisions_legacy").select("*").gte("trade_date", weekStart).lte("trade_date", weekEnd),
     supabase.from("campaigns").select("*").gte("trade_date", weekStart).lte("trade_date", weekEnd).order("started_at"),
     supabase
       .from("broker_account_snapshots")
@@ -162,9 +162,9 @@ export async function fetchWeeklyRawData(weekStart: string, weekEnd: string): Pr
   return {
     weekStart,
     weekEnd,
-    dailyReviews: (dailyReviews ?? []) as DailyReviewRow[],
+    dailyReviews: (dailyReviews ?? []) as DailyReviewLegacyRow[],
     lockedCommitments,
-    shadowlistDecisions: (shadowlistDecisions ?? []) as ShadowlistDecisionRow[],
+    shadowlistDecisions: (shadowlistDecisions ?? []) as ShadowlistDecisionLegacyRow[],
     campaigns: campaignRows,
     fillsByCampaignId,
     accountSnapshotsInWeek,
