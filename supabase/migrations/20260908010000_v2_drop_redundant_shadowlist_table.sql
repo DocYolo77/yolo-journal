@@ -1,0 +1,15 @@
+-- Correction to 20260908000000_v2_capture_tool_rewrite.sql: that
+-- migration created a new v2 `shadowlist_decisions` table (taken +
+-- note per ticker), but re-reading the Umbau-Anweisung v2 spec more
+-- carefully, that was a mistake. §2 is explicit: "Eine Haupttabelle
+-- plus zwei Kindtabellen. Mehr braucht es nicht" (one main table plus
+-- child tables, nothing more needed), and its own daily_review_
+-- watchlist already carries `taken boolean` and `note text` columns.
+-- §3.3 confirms the Shadowlist's ticker source *is* that same
+-- review-head watchlist — it is a dedicated view/editor over
+-- daily_review_watchlist (scope='today') rows, not a separate table.
+--
+-- The table was created empty and never used by any shipped code
+-- (this correction lands before the new Shadowlist UI was built), so
+-- dropping it is lossless.
+drop table if exists public.shadowlist_decisions cascade;

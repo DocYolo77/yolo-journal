@@ -17,25 +17,23 @@ const iconProps = {
   strokeLinejoin: "round" as const,
 };
 
-// Beta scope: these five workflows are wired up end-to-end (Weekly
-// Review joined the P0 set once its aggregation/report/PDF/JSON layer
-// shipped). Monthly Review, Rules & Timeline, and Google Drive Export
-// remain P1 (post-Beta) — their routes still exist as placeholders but
-// are intentionally not linked from nav until they're real, per the
-// "funktional > schön" beta instruction (hidden rather than shown as
-// dead "coming later" links). Pre-Market Commitment is the first-class
-// home workflow, hence href "/". See
-// LEGACY_JOURNAL_OS_V7_4_3_REFERENCE.md §1 for the full legacy nav this
-// will grow back into after the Beta.
+// v2 rewrite (Umbau-Anweisung v2): the Pre-Market Commitment workflow
+// and the IBKR/Broker import path are both gone — Daily Review is now
+// the first-class home workflow ("/" redirects to it, see app/page.tsx).
+// Weekly Review, Archiv, and Lessons Learned are unaffected — the v2
+// rewrite is deliberately scoped to Daily Review + Shadowlist only.
+// Monthly Review, Rules & Timeline, and Google Drive Export remain P1
+// (post-Beta) — their routes still exist as placeholders but are
+// intentionally not linked from nav.
 export const NAV_ITEMS: NavItem[] = [
   {
-    href: "/",
-    label: "Pre-Market Commitment",
+    href: "/daily-review",
+    label: "Daily Review",
     icon: (
       <svg {...iconProps} aria-hidden="true">
-        <rect x="5" y="3" width="14" height="18" rx="2" />
-        <path d="M9 3v2h6V3" />
-        <path d="M9 12l2 2 4-4" />
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M8 3v3M16 3v3" />
       </svg>
     ),
   },
@@ -46,28 +44,6 @@ export const NAV_ITEMS: NavItem[] = [
       <svg {...iconProps} aria-hidden="true">
         <path d="M2 12c2.5-4.5 6-6.5 10-6.5s7.5 2 10 6.5c-2.5 4.5-6 6.5-10 6.5S4.5 16.5 2 12Z" />
         <circle cx="12" cy="12" r="3" />
-      </svg>
-    ),
-  },
-  {
-    href: "/ibkr-import",
-    label: "IBKR Import",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <path d="M12 3v12" />
-        <path d="M7 10l5 5 5-5" />
-        <path d="M5 19h14" />
-      </svg>
-    ),
-  },
-  {
-    href: "/daily-review",
-    label: "Daily Review",
-    icon: (
-      <svg {...iconProps} aria-hidden="true">
-        <rect x="3" y="4" width="18" height="17" rx="2" />
-        <path d="M3 9h18" />
-        <path d="M8 3v3M16 3v3" />
       </svg>
     ),
   },

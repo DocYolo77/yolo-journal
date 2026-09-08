@@ -10,129 +10,15 @@
 // still exist in the database but are no longer used by this app, so no
 // types are defined for them here.
 
-export type CommitmentStatus = "DRAFT" | "LOCKED";
+// WatchlistType, CommitmentRow and its child-table types, LoserRiskStateRow
+// and AuditEventRow described tables that either no longer exist
+// (commitment_watchlist_items/ep_candidates/risk_changes/overrides,
+// audit_events — dropped in 20260908000000_v2_capture_tool_rewrite.sql)
+// or were never used by any shipped code. `commitments` itself still
+// exists (kept for Weekly Review) but nothing types it anymore — Weekly
+// Review's fetch.ts selects specific columns off it untyped, same
+// established pattern as the other broker/campaign tables it reads raw.
 export type WatchlistType = "Prime" | "Watchlist" | "Secondary";
-
-export type CommitmentRow = {
-  id: string;
-  user_id: string | null;
-
-  schema_version: number;
-  trade_date: string;
-  revision: number;
-  status: CommitmentStatus;
-
-  market_snapshot: Record<string, unknown> | null;
-
-  personal_state: string | null;
-  market_state_note: string | null;
-  system_risk_pct: number | null;
-  committed_risk_pct: number | null;
-  intraday_risk_pct: number | null;
-
-  qqq_extension_atr_multiple: number | null;
-  qqq_extension_cap_active: boolean;
-  qqq_extension_note: string | null;
-  // 20260814000000_add_spy_extension_to_commitments.sql
-  spy_extension_atr_multiple: number | null;
-
-  mtd_manual_pct: number | null;
-  mtd_auto_fresh_entry_realized_pct: number | null;
-  mtd_pause_threshold_reached: boolean;
-  mtd_note: string | null;
-
-  loss_state_manual_counter: number | null;
-  loss_state_auto_counter: number | null;
-  loss_state_review_trigger_reached: boolean;
-  loss_state_reduced_size_mode: boolean;
-  loss_state_note: string | null;
-
-  operational_plan: string | null;
-  improvement_focus: string | null;
-
-  max_tickers: number;
-  source_lock: boolean;
-  intraday_hand_adds: number;
-
-  created_at: string;
-  updated_at: string;
-  locked_at: string | null;
-};
-
-export type CommitmentWatchlistItemRow = {
-  id: string;
-  user_id: string | null;
-  commitment_id: string;
-  ticker: string;
-  risk_pct: number | null;
-  list_type: WatchlistType;
-  notes: string | null;
-  sort_order: number;
-  created_at: string;
-};
-
-export type CommitmentEpCandidateRow = {
-  id: string;
-  user_id: string | null;
-  commitment_id: string;
-  ticker: string;
-  gap_8_pct: boolean;
-  rvol_1_5: boolean;
-  news_trigger: boolean;
-  event_day: boolean;
-  context_not_defensive: boolean;
-  notes: string | null;
-  created_at: string;
-};
-
-export type CommitmentRiskChangeRow = {
-  id: string;
-  user_id: string | null;
-  commitment_id: string;
-  changed_at: string;
-  old_risk_pct: number;
-  new_risk_pct: number;
-  reason: string | null;
-  created_at: string;
-};
-
-export type CommitmentOverrideRow = {
-  id: string;
-  user_id: string | null;
-  commitment_id: string;
-  occurred_at: string;
-  override_type: string;
-  description: string;
-  created_at: string;
-};
-
-export type LoserRiskStateRow = {
-  id: string;
-  user_id: string | null;
-  as_of: string;
-  loser_count: number;
-  reduced_size_mode: boolean;
-  source: string | null;
-  updated_at: string;
-  created_at: string;
-};
-
-export type AuditEventRow = {
-  event_id: string;
-  user_id: string | null;
-  seq: number;
-  schema_version: number;
-  event_time: string;
-  event_type: string;
-  trade_date: string | null;
-  entity_type: string;
-  entity_id: string | null;
-  actor: string | null;
-  payload: Record<string, unknown> | null;
-  previous_hash: string | null;
-  hash: string;
-  created_at: string;
-};
 
 // Renamed from ShadowlistDecisionRow when the v2 rewrite repurposed
 // that clean name for the simplified capture-tool shape below —
@@ -153,21 +39,11 @@ export type ShadowlistDecisionLegacyRow = {
   updated_at: string;
 };
 
-// 20260908000000_v2_capture_tool_rewrite.sql — decoupled from the
-// abolished Commitment. Ticker source is the review's own
-// daily_review_watchlist (scope='today'); no more list_type/decision/
-// reason enums, no auto-override (no broker data to auto-override from).
-export type ShadowlistDecisionRow = {
-  id: string;
-  user_id: string | null;
-  review_id: string;
-  trade_date: string;
-  ticker: string;
-  taken: boolean;
-  note: string | null;
-  created_at: string;
-  updated_at: string;
-};
+// Note: there is no longer a separate v2 shadowlist_decisions table —
+// 20260908010000_v2_drop_redundant_shadowlist_table.sql corrected an
+// initial mistake. Per the spec, the Shadowlist screen is a dedicated
+// view/editor directly over DailyReviewWatchlistRow (scope='today')
+// rows, since that table already carries `taken`/`note`.
 
 // 20260813200000_create_daily_reviews.sql
 
@@ -320,7 +196,7 @@ export type DailyReviewWatchlistRow = {
   ticker: string;
   sort_order: number;
   taken: boolean;
-  notes: string | null;
+  note: string | null;
 
   created_at: string;
   updated_at: string;
@@ -449,108 +325,16 @@ export type TickerChartData = {
   orb_levels: OrbLevel[];
 };
 
-export type ReportMarketData = {
-  index_context: { ticker: "QQQ" | "SPY"; daily: ChartSeriesPoint[] }[];
-  tickers: TickerChartData[];
-  fetch_error: string | null;
-};
-
-export type BrokerAccountSnapshotSummary = {
-  net_liquidation_value: number | null;
-  cash: number | null;
-  buying_power: number | null;
-  gross_exposure_pct: number | null;
-  captured_at: string;
-  /**
-   * The snapshot's real trading_date — may differ from the report's
-   * trade_date when IBKR's own EOD batch hadn't finished processing the
-   * requested day yet at sync time (see getDailyPnlSnapshotForDate).
-   * Always label a mismatch honestly instead of implying same-day data.
-   */
-  trading_date: string | null;
-};
-
-export type DailyReportCampaignFill = {
-  side: "BUY" | "SELL";
-  price: number | null;
-  quantity: number;
-  executed_at: string;
-};
-
-/** One of today's economic campaigns (see campaigns table) — real IBKR fills, not raw clicks. */
-export type DailyReportCampaign = {
-  id: string;
-  symbol: string;
-  direction: string | null;
-  status: string;
-  started_at: string | null;
-  ended_at: string | null;
-  realized_pnl: number | null;
-  fills: DailyReportCampaignFill[];
-};
-
-export type DailyReportPortfolioPosition = {
-  symbol: string;
-  quantity: number;
-  average_price: number | null;
-  market_price: number | null;
-  unrealized_pnl: number | null;
-  currency: string | null;
-};
-
-export type DailyReportPortfolioSnapshot = {
-  captured_at: string | null;
-  positions: DailyReportPortfolioPosition[];
-  /**
-   * "manual" when the user's manual_portfolio_positions override was
-   * non-empty at finalization time (IBKR sync doesn't always reflect the
-   * real portfolio correctly) — always label which one the report/PDF is
-   * actually showing instead of silently implying it's the IBKR sync.
-   */
-  source: "ibkr_sync" | "manual";
-};
-
-export type DailyReportSnapshotData = {
-  report_schema_version: 1;
-  trade_date: string;
-  created_at: string;
-  review: DailyReviewRow;
-  commitment:
-    | (CommitmentRow & {
-        watchlist: CommitmentWatchlistItemRow[];
-        ep_candidates: CommitmentEpCandidateRow[];
-      })
-    | null;
-  shadowlist: ShadowlistDecisionRow[];
-  broker_account_snapshot: BrokerAccountSnapshotSummary | null;
-  market_data: ReportMarketData;
-  /**
-   * Today's economic campaigns with real entry/add/exit fills (price,
-   * time, quantity) — sourced from campaigns/campaign_executions/
-   * broker_executions. Optional because reports finalized before this
-   * field existed have no such data in their immutable stored snapshot;
-   * always fall back to [] rather than fail rendering old reports.
-   */
-  campaigns?: DailyReportCampaign[];
-  /**
-   * The full IBKR portfolio snapshot nearest this trade_date — covers
-   * both same-day campaign positions and older carried positions (the
-   * legacy "old positions separated from same-day campaigns" rule).
-   * Optional for the same reason as `campaigns` above.
-   */
-  portfolio_snapshot?: DailyReportPortfolioSnapshot;
-};
-
-export type DailyReportSnapshotRow = {
-  id: string;
-  user_id: string | null;
-  trade_date: string;
-  report_schema_version: number;
-  snapshot: DailyReportSnapshotData;
-  pdf_storage_path: string | null;
-  pdf_generated_at: string | null;
-  created_at: string;
-};
+// DailyReportSnapshotData/Row and its ReportMarketData/BrokerAccount
+// SnapshotSummary/DailyReportCampaign*/DailyReportPortfolio* satellites
+// described the old daily_report_snapshots-backed finalized-report
+// system (app/reports/daily/*, lib/data/report-snapshot.ts,
+// lib/reports/pdf-document.tsx) — all deleted in the v2 rewrite (§1.4:
+// "Ein Daily Review ist jederzeit editierbar. Das PDF ist der
+// Snapshot."). The daily_report_snapshots table itself is untouched in
+// the DB (Weekly Review's getSourceDailyReportIds still reads its
+// `id`/`trade_date` columns untyped), but nothing needs its full row
+// shape anymore.
 
 // 20260814040000_create_weekly_reviews.sql
 
@@ -887,15 +671,7 @@ export type CryptoWeeklyReviewRow = {
   updated_at: string;
 };
 
-// 20260829000000_create_ibkr_import_raw.sql
-
-export type IbkrImportRawRow = {
-  id: string;
-  user_id: string | null;
-  review_date: string;
-  schema_version: string | null;
-  snapshot_datetime: string | null;
-  raw_json: unknown;
-  imported_at: string;
-  created_at: string;
-};
+// Note: 20260829000000_create_ibkr_import_raw.sql's ibkr_import_raw
+// table was never applied to the live database and its whole feature
+// (manual IBKR JSON import) is deleted in the v2 rewrite — no type
+// needed here.
