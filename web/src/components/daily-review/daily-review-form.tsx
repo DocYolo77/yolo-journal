@@ -124,6 +124,18 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+// Splits a pasted ticker list on whitespace, commas, or semicolons —
+// "AAPL, MSFT NVDA" / one-per-line all work — same delimiter set the
+// old Commitment watchlist importer used, brought back here since
+// pasting a whole list at once was more comfortable than one ticker at
+// a time.
+function splitTickerList(raw: string): string[] {
+  return raw
+    .split(/[\s,;]+/)
+    .map((t) => normalizeTicker(t))
+    .filter(Boolean);
+}
+
 function WatchlistChips({
   reviewId,
   scope,
@@ -133,23 +145,34 @@ function WatchlistChips({
   reviewId: string;
   scope: DailyReviewWatchlistScope;
   items: DailyReviewWatchlistRow[];
-  onListChange: (items: DailyReviewWatchlistRow[]) => void;
+  onListChange: React.Dispatch<React.SetStateAction<DailyReviewWatchlistRow[]>>;
 }) {
   const [draft, setDraft] = useState("");
   const [, startTransition] = useTransition();
 
-  function handleAdd() {
-    const ticker = normalizeTicker(draft);
-    if (!ticker) return;
+  function importTickers(raw: string) {
+    const existing = new Set(items.map((i) => i.ticker));
+    const toAdd: string[] = [];
+    for (const ticker of splitTickerList(raw)) {
+      if (existing.has(ticker)) continue;
+      existing.add(ticker);
+      toAdd.push(ticker);
+    }
+    if (toAdd.length === 0) return;
     setDraft("");
     startTransition(async () => {
-      const result = await addWatchlistTickerAction(reviewId, scope, ticker);
-      if (result.data) onListChange([...items, result.data]);
+      for (const ticker of toAdd) {
+        const result = await addWatchlistTickerAction(reviewId, scope, ticker);
+        if (result.data) {
+          const added = result.data;
+          onListChange((prev) => (prev.some((p) => p.ticker === added.ticker) ? prev : [...prev, added]));
+        }
+      }
     });
   }
 
   function handleRemove(id: string) {
-    onListChange(items.filter((item) => item.id !== id));
+    onListChange((prev) => prev.filter((item) => item.id !== id));
     startTransition(async () => {
       await removeWatchlistTickerAction(id);
     });
@@ -176,14 +199,21 @@ function WatchlistChips({
       <input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData("text");
+          if (/[\s,;]/.test(pasted.trim())) {
+            e.preventDefault();
+            importTickers(pasted);
+          }
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            handleAdd();
+            importTickers(draft);
           }
         }}
-        onBlur={handleAdd}
-        placeholder="Ticker + Enter"
+        onBlur={() => importTickers(draft)}
+        placeholder="Ticker(s) einfügen + Enter"
         className="w-28 rounded-full border border-dashed border-border bg-transparent px-3 py-1 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
       />
     </div>
