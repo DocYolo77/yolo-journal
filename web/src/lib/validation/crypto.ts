@@ -45,7 +45,7 @@ export function parseCryptoTradeQuickAdd(
   };
 }
 
-/** Full editable field set on the trade detail page (screenshots handled separately as File uploads). */
+/** Full editable field set on the trade detail page. */
 export type CryptoTradeUpdateInput = {
   trade_date: string;
   coin: string;
@@ -55,6 +55,7 @@ export type CryptoTradeUpdateInput = {
   risk_pct: number | null;
   result_usd: number | null;
   result_r: number | null;
+  entry_tradingview_url: string | null;
   thesis: string | null;
   management: string | null;
   review_good: string | null;
@@ -87,6 +88,7 @@ export function parseCryptoTradeUpdate(
       risk_pct: toNullableNumber(formData.get("risk_pct")),
       result_usd: toNullableNumber(formData.get("result_usd")),
       result_r: toNullableNumber(formData.get("result_r")),
+      entry_tradingview_url: toNullableText(formData.get("entry_tradingview_url")),
       thesis: toNullableText(formData.get("thesis")),
       management: toNullableText(formData.get("management")),
       review_good: toNullableText(formData.get("review_good")),

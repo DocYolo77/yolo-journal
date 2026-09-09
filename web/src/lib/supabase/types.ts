@@ -633,9 +633,9 @@ export type CryptoTradeRow = {
   result_usd: number | null;
   result_r: number | null;
 
-  /** Storage path in the "crypto-screenshots" bucket, not a URL — a signed URL is generated at render time. */
-  entry_screenshot_path: string | null;
-  after_screenshot_path: string | null;
+  /** TradingView chart link, pasted by hand — not an uploaded screenshot. */
+  entry_tradingview_url: string | null;
+  after_tradingview_url: string | null;
 
   thesis: string | null;
   management: string | null;

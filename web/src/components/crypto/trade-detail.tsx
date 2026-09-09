@@ -8,7 +8,6 @@ import {
   reopenCryptoTradeAction,
   updateCryptoTradeAction,
   updateCryptoTradeAftercareAction,
-  uploadCryptoScreenshotAction,
 } from "@/app/crypto/actions";
 import { CRYPTO_DIRECTIONS, CRYPTO_PRODUCTS } from "@/lib/validation/crypto";
 import type { CryptoTradeRow } from "@/lib/supabase/types";
@@ -27,72 +26,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function ScreenshotSlot({
-  tradeId,
-  slot,
-  url,
-  disabled,
-}: {
-  tradeId: string;
-  slot: "entry" | "after";
-  url: string | null;
-  disabled?: boolean;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function upload() {
-    const file = fileRef.current?.files?.[0];
-    if (!file) return;
-    setError(null);
-    const formData = new FormData();
-    formData.set("screenshot", file);
-    startTransition(async () => {
-      const result = await uploadCryptoScreenshotAction(tradeId, slot, formData);
-      if (result.error) setError(result.error);
-      if (fileRef.current) fileRef.current.value = "";
-    });
-  }
-
+function TradingViewLinkPreview({ url }: { url: string | null }) {
+  if (!url) return null;
   return (
-    <div className="space-y-2">
-      <p className={labelClass}>{slot === "entry" ? "Entry Screenshot" : "After Screenshot"}</p>
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, not a static asset Next can optimize.
-        <img src={url} alt={slot === "entry" ? "Entry Screenshot" : "After Screenshot"} className="w-full rounded-md border border-border object-contain" />
-      ) : (
-        <div className="flex h-40 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
-          Kein Screenshot
-        </div>
-      )}
-      {!disabled ? (
-        <div className="flex items-center gap-2">
-          <input ref={fileRef} type="file" accept="image/*" className="text-xs text-muted-foreground" />
-          <button
-            type="button"
-            onClick={upload}
-            disabled={isPending}
-            className="shrink-0 rounded-md border border-accent/50 px-2.5 py-1 text-xs text-accent hover:bg-accent/10 disabled:opacity-60"
-          >
-            {isPending ? "Lädt…" : "Hochladen"}
-          </button>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">Gesperrt — Trade ist abgeschlossen.</p>
-      )}
-      {error ? <p className="text-xs text-negative">{error}</p> : null}
-    </div>
+    <a href={url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+      Chart auf TradingView öffnen ↗
+    </a>
   );
 }
 
-export function CryptoTradeDetail({
-  trade,
-  screenshotUrls,
-}: {
-  trade: CryptoTradeRow;
-  screenshotUrls: { entry: string | null; after: string | null };
-}) {
+export function CryptoTradeDetail({ trade }: { trade: CryptoTradeRow }) {
   const router = useRouter();
   const isOpen = trade.status === "OPEN";
 
@@ -268,6 +211,18 @@ export function CryptoTradeDetail({
             <textarea name="management" defaultValue={trade.management ?? ""} disabled={!isOpen} className={textareaClass} />
           </Field>
 
+          <Field label="Entry — TradingView-Link">
+            <input
+              type="url"
+              name="entry_tradingview_url"
+              defaultValue={trade.entry_tradingview_url ?? ""}
+              disabled={!isOpen}
+              placeholder="https://www.tradingview.com/x/..."
+              className={inputClass}
+            />
+          </Field>
+          <TradingViewLinkPreview url={trade.entry_tradingview_url} />
+
           {isOpen ? (
             <div className="flex items-center gap-3">
               <button
@@ -288,16 +243,19 @@ export function CryptoTradeDetail({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">Screenshots</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <ScreenshotSlot tradeId={trade.id} slot="entry" url={screenshotUrls.entry} disabled={!isOpen} />
-          <ScreenshotSlot tradeId={trade.id} slot="after" url={screenshotUrls.after} />
-        </div>
-      </section>
-
-      <section className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Review &amp; Lesson</h2>
         <form ref={aftercareFormRef} className="space-y-4 rounded-md border border-border bg-surface p-4">
+          <Field label="After — TradingView-Link">
+            <input
+              type="url"
+              name="after_tradingview_url"
+              defaultValue={trade.after_tradingview_url ?? ""}
+              placeholder="https://www.tradingview.com/x/..."
+              className={inputClass}
+            />
+          </Field>
+          <TradingViewLinkPreview url={trade.after_tradingview_url} />
+
           <Field label="Was lief gut?">
             <textarea name="review_good" defaultValue={trade.review_good ?? ""} className={textareaClass} />
           </Field>

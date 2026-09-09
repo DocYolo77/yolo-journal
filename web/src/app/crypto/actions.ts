@@ -8,7 +8,6 @@ import {
   reopenCryptoTrade,
   updateCryptoTrade,
   updateCryptoTradeAftercare,
-  uploadCryptoScreenshot,
 } from "@/lib/data/crypto-trades";
 import {
   createCryptoLearningFromTrade,
@@ -74,6 +73,7 @@ export async function updateCryptoTradeAftercareAction(
   formData: FormData
 ): Promise<{ data: CryptoTradeRow | null; error: string | null }> {
   const result = await updateCryptoTradeAftercare(id, {
+    after_tradingview_url: (formData.get("after_tradingview_url") as string | null)?.trim() || null,
     review_good: (formData.get("review_good") as string | null)?.trim() || null,
     review_bad: (formData.get("review_bad") as string | null)?.trim() || null,
     review_better: (formData.get("review_better") as string | null)?.trim() || null,
@@ -81,29 +81,6 @@ export async function updateCryptoTradeAftercareAction(
   });
   revalidateCryptoPaths(id);
   return result;
-}
-
-export async function uploadCryptoScreenshotAction(
-  id: string,
-  slot: "entry" | "after",
-  formData: FormData
-): Promise<{ error: string | null }> {
-  const file = formData.get("screenshot");
-  if (!(file instanceof File) || file.size === 0) {
-    return { error: "Keine Datei ausgewählt." };
-  }
-
-  if (slot === "entry") {
-    const existing = await getCryptoTrade(id);
-    if (!existing.data) return { error: existing.error ?? "Trade nicht gefunden." };
-    if (existing.data.status === "CLOSED") {
-      return { error: "Trade ist abgeschlossen — Entry Screenshot ist gesperrt." };
-    }
-  }
-
-  const result = await uploadCryptoScreenshot(id, slot, file);
-  revalidateCryptoPaths(id);
-  return { error: result.error };
 }
 
 export async function closeCryptoTradeAction(id: string): Promise<{ data: CryptoTradeRow | null; error: string | null }> {

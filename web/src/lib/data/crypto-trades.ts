@@ -2,28 +2,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { CryptoTradeRow } from "@/lib/supabase/types";
 import type { CryptoTradeQuickAddInput, CryptoTradeUpdateInput } from "@/lib/validation/crypto";
 
-type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
-
-const SCREENSHOTS_BUCKET = "crypto-screenshots";
-// Long enough to cover a full page view without re-signing per request,
-// short enough that a leaked link doesn't stay valid indefinitely — same
-// tradeoff already accepted for the private "reports" PDF bucket.
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
-
-async function ensureScreenshotsBucket(supabase: SupabaseAdminClient): Promise<string | null> {
-  try {
-    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-    if (listError) return `Screenshot-Bucket konnte nicht geprüft werden: ${listError.message}`;
-    if (buckets?.some((b) => b.name === SCREENSHOTS_BUCKET)) return null;
-
-    const { error: createError } = await supabase.storage.createBucket(SCREENSHOTS_BUCKET, { public: false });
-    if (createError) return `Screenshot-Bucket konnte nicht erstellt werden: ${createError.message}`;
-    return null;
-  } catch (e) {
-    return e instanceof Error ? e.message : "Screenshot-Bucket konnte nicht erstellt werden.";
-  }
-}
-
 export async function listCryptoTrades(): Promise<
   { data: CryptoTradeRow[]; error: null } | { data: null; error: string }
 > {
@@ -91,7 +69,7 @@ export async function createCryptoTrade(
  * OPEN for the "Basisdaten"/management fields — a CLOSED trade's basics
  * and management are meant to be locked, per spec ("gilt als final und
  * soll anschließend nicht mehr versehentlich verändert werden"). The
- * always-editable fields (after-screenshot, review, lesson) go through
+ * always-editable fields (after-chart link, review, lesson) go through
  * updateCryptoTradeAftercare instead, which has no such gate.
  */
 export async function updateCryptoTrade(
@@ -113,8 +91,9 @@ export async function updateCryptoTrade(
   }
 }
 
-/** Fields that stay editable after a trade is CLOSED (after-screenshot handled separately via uploadCryptoScreenshot). */
+/** Fields that stay editable after a trade is CLOSED. */
 export type CryptoTradeAftercareInput = {
+  after_tradingview_url: string | null;
   review_good: string | null;
   review_bad: string | null;
   review_better: string | null;
@@ -186,66 +165,3 @@ export async function reopenCryptoTrade(
   }
 }
 
-function extensionFromFile(file: File): string {
-  const fromName = file.name.split(".").pop();
-  if (fromName && fromName.length <= 5) return fromName.toLowerCase();
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  return "jpg";
-}
-
-/** Uploads an entry/after screenshot, storing only the path (not a URL) on the trade row. */
-export async function uploadCryptoScreenshot(
-  tradeId: string,
-  slot: "entry" | "after",
-  file: File
-): Promise<{ path: string | null; error: string | null }> {
-  try {
-    const supabase = getSupabaseAdmin();
-    const bucketError = await ensureScreenshotsBucket(supabase);
-    if (bucketError) return { path: null, error: bucketError };
-
-    const path = `${tradeId}/${slot}.${extensionFromFile(file)}`;
-    const { error: uploadError } = await supabase.storage
-      .from(SCREENSHOTS_BUCKET)
-      .upload(path, file, { contentType: file.type || undefined, upsert: true });
-
-    if (uploadError) {
-      console.error("uploadCryptoScreenshot: upload failed", uploadError);
-      return { path: null, error: "Screenshot konnte nicht hochgeladen werden." };
-    }
-
-    const column = slot === "entry" ? "entry_screenshot_path" : "after_screenshot_path";
-    const { error: updateError } = await supabase.from("crypto_trades").update({ [column]: path }).eq("id", tradeId);
-    if (updateError) {
-      console.error("uploadCryptoScreenshot: trade row update failed", updateError);
-      return { path: null, error: "Screenshot-Pfad konnte nicht gespeichert werden." };
-    }
-
-    return { path, error: null };
-  } catch (e) {
-    console.error("uploadCryptoScreenshot failed", e);
-    return { path: null, error: "Screenshot konnte nicht hochgeladen werden." };
-  }
-}
-
-/** Generates a fresh time-limited signed URL for a stored screenshot path — paths never expire, signed URLs do. */
-export async function getCryptoScreenshotSignedUrls(paths: {
-  entry: string | null;
-  after: string | null;
-}): Promise<{ entry: string | null; after: string | null }> {
-  const supabase = getSupabaseAdmin();
-  const [entry, after] = await Promise.all([
-    paths.entry
-      ? supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(paths.entry, SIGNED_URL_TTL_SECONDS)
-      : Promise.resolve(null),
-    paths.after
-      ? supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(paths.after, SIGNED_URL_TTL_SECONDS)
-      : Promise.resolve(null),
-  ]);
-
-  return {
-    entry: entry && !entry.error ? entry.data.signedUrl : null,
-    after: after && !after.error ? after.data.signedUrl : null,
-  };
-}

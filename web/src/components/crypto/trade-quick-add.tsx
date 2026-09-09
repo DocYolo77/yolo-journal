@@ -15,8 +15,9 @@ function todayIso(): string {
 /**
  * Minimal quick-add: date/coin/direction/product only, per the "Trade
  * dokumentieren -> fertig innerhalb weniger Minuten" UX principle —
- * everything else (thesis, screenshots, management, review, lesson) is
- * filled in on the trade's own detail page right after creation.
+ * everything else (thesis, TradingView links, management, review,
+ * lesson) is filled in on the trade's own detail page right after
+ * creation.
  */
 export function CryptoTradeQuickAdd() {
   const router = useRouter();
