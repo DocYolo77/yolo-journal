@@ -7,7 +7,6 @@ import type {
   DailyReviewRow,
   DailyReviewTradeRow,
   DailyReviewWatchlistRow,
-  DailyReviewWatchlistScope,
 } from "@/lib/supabase/types";
 import {
   DAILY_REVIEW_GUARDRAILS,
@@ -138,12 +137,10 @@ function splitTickerList(raw: string): string[] {
 
 function WatchlistChips({
   reviewId,
-  scope,
   items,
   onListChange,
 }: {
   reviewId: string;
-  scope: DailyReviewWatchlistScope;
   items: DailyReviewWatchlistRow[];
   onListChange: React.Dispatch<React.SetStateAction<DailyReviewWatchlistRow[]>>;
 }) {
@@ -162,7 +159,7 @@ function WatchlistChips({
     setDraft("");
     startTransition(async () => {
       for (const ticker of toAdd) {
-        const result = await addWatchlistTickerAction(reviewId, scope, ticker);
+        const result = await addWatchlistTickerAction(reviewId, ticker);
         if (result.data) {
           const added = result.data;
           onListChange((prev) => (prev.some((p) => p.ticker === added.ticker) ? prev : [...prev, added]));
@@ -427,25 +424,20 @@ function GuardrailRow({
 export function DailyReviewForm({
   tradeDate,
   review,
-  watchlistToday: initialWatchlistToday,
-  watchlistNext: initialWatchlistNext,
+  watchlist: initialWatchlist,
   trades: initialTrades,
   guardrails: initialGuardrails,
-  priorSessionPlanHint,
   tradeFieldSuggestions,
 }: {
   tradeDate: string;
   review: DailyReviewRow;
-  watchlistToday: DailyReviewWatchlistRow[];
-  watchlistNext: DailyReviewWatchlistRow[];
+  watchlist: DailyReviewWatchlistRow[];
   trades: DailyReviewTradeRow[];
   guardrails: DailyReviewGuardrailRow[];
-  priorSessionPlanHint: string | null;
   tradeFieldSuggestions: { setup: string[]; trigger_tactic: string[]; stop_logic: string[] };
 }) {
   const saveStatusState = useSaveStatusState();
-  const [watchlistToday, setWatchlistToday] = useState(initialWatchlistToday);
-  const [watchlistNext, setWatchlistNext] = useState(initialWatchlistNext);
+  const [watchlist, setWatchlist] = useState(initialWatchlist);
   const [trades, setTrades] = useState(initialTrades);
   const [, startTransition] = useTransition();
   const [markdownState, setMarkdownState] = useState<{ status: "idle" | "loading" | "copied" | "error"; message?: string }>({
@@ -496,11 +488,6 @@ export function DailyReviewForm({
     parseFocusLevel,
     contextValue
   );
-  const [gameplan, onGameplanChange] = useAutosaveTextWithContext(
-    review.gameplan ?? "",
-    (value) => saveField({ gameplan: value || null }),
-    contextValue
-  );
   const [whatWentWell, onWhatWentWellChange] = useAutosaveTextWithContext(
     review.what_went_well ?? "",
     (value) => saveField({ what_went_well: value || null }),
@@ -526,9 +513,9 @@ export function DailyReviewForm({
     (value) => saveField({ self_grade: value || null }),
     contextValue
   );
-  const [nextSessionPlan, onNextSessionPlanChange] = useAutosaveTextWithContext(
-    review.next_session_plan ?? "",
-    (value) => saveField({ next_session_plan: value || null }),
+  const [sessionPlan, onSessionPlanChange] = useAutosaveTextWithContext(
+    review.session_plan ?? "",
+    (value) => saveField({ session_plan: value || null }),
     contextValue
   );
   const [opportunitySpike, onOpportunitySpikeChange] = useAutosaveTextWithContext(
@@ -608,15 +595,33 @@ export function DailyReviewForm({
               />
             </Field>
           </div>
-          <Field label="Watchlist (heute)">
-            <WatchlistChips reviewId={review.id} scope="today" items={watchlistToday} onListChange={setWatchlistToday} />
+          <Field label="Watchlist">
+            <p className="mb-2 text-xs text-muted-foreground">{SHADOW_TEXTS.watchlist}</p>
+            <WatchlistChips reviewId={review.id} items={watchlist} onListChange={setWatchlist} />
           </Field>
         </Block>
 
-        <Block title="2 · Kontext">
+        <Block title="2 · Plan & Gedankengänge für die heutige Session">
+          <Field label="Plan & Gedankengänge">
+            <ShadowTextarea value={sessionPlan} onChange={onSessionPlanChange} placeholder={SHADOW_TEXTS.sessionPlan} rows={5} />
+          </Field>
+          <Field label="Opportunity Spike">
+            <ShadowTextarea
+              value={opportunitySpike}
+              onChange={onOpportunitySpikeChange}
+              placeholder={SHADOW_TEXTS.opportunitySpike}
+              rows={2}
+            />
+          </Field>
+        </Block>
+
+        <Block title="3 · Marktumgebung">
           <Field label="Marktumgebung">
             <ShadowTextarea value={marketContext} onChange={onMarketContextChange} placeholder={SHADOW_TEXTS.marketContext} />
           </Field>
+        </Block>
+
+        <Block title="4 · Persönliche Lage / Mentales">
           <Field label="Persönliche Lage / Mentales">
             <ShadowTextarea value={personalState} onChange={onPersonalStateChange} placeholder={SHADOW_TEXTS.personalState} />
           </Field>
@@ -631,18 +636,7 @@ export function DailyReviewForm({
           </Field>
         </Block>
 
-        <Block title="3 · Gameplan">
-          {priorSessionPlanHint ? (
-            <p className="rounded-md border border-dashed border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-              Dein Plan von gestern Abend: {priorSessionPlanHint}
-            </p>
-          ) : null}
-          <Field label="Was war der Plan">
-            <ShadowTextarea value={gameplan} onChange={onGameplanChange} placeholder={SHADOW_TEXTS.gameplan} rows={5} />
-          </Field>
-        </Block>
-
-        <Block title="4 · Ticker-Karten">
+        <Block title="5 · Ticker-Karten">
           <div className="space-y-3">
             {trades.map((trade) => (
               <TradeCard
@@ -663,7 +657,7 @@ export function DailyReviewForm({
           </button>
         </Block>
 
-        <Block title="5 · Fazit">
+        <Block title="6 · Fazit">
           <Field label="Was lief gut">
             <ShadowTextarea value={whatWentWell} onChange={onWhatWentWellChange} placeholder={SHADOW_TEXTS.whatWentWell} />
           </Field>
@@ -701,23 +695,6 @@ export function DailyReviewForm({
               onChange={(e) => onSelfGradeChange(e.target.value)}
               placeholder={SHADOW_TEXTS.selfGrade}
               className="w-32 rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
-            />
-          </Field>
-        </Block>
-
-        <Block title="6 · Ausblick">
-          <Field label="Watchlist für morgen">
-            <WatchlistChips reviewId={review.id} scope="next" items={watchlistNext} onListChange={setWatchlistNext} />
-          </Field>
-          <Field label="Plan für die morgige Session">
-            <ShadowTextarea value={nextSessionPlan} onChange={onNextSessionPlanChange} placeholder={SHADOW_TEXTS.nextSessionPlan} rows={5} />
-          </Field>
-          <Field label="Opportunity Spike">
-            <ShadowTextarea
-              value={opportunitySpike}
-              onChange={onOpportunitySpikeChange}
-              placeholder={SHADOW_TEXTS.opportunitySpike}
-              rows={2}
             />
           </Field>
         </Block>

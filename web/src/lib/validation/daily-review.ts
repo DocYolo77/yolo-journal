@@ -42,8 +42,6 @@ export const SHADOW_TEXTS = {
     "Wo stehen QQQ/SPY zu EMA10, EMA20, SMA50? Wie weit sind die Indizes vom SMA50 entfernt — ist etwas überdehnt? Was hat die Breite gemacht, wer führt, wer bricht? Auflösung oder weiter in der Range?",
   personalState:
     "Wie war der Zustand vor dem Open — und hat er sich während der Session verändert? Fester Screen oder unterwegs? Gab es einen Impuls, den du erkannt und nicht ausgeführt hast? Euphorie? Angst? Verzweiflung? Teilst du Screenshots?",
-  gameplan:
-    "Was war der Plan vor dem Open — und wo stand er geschrieben? Wolltest du Stärke oder Rücksetzer kaufen? Wo wolltest du aggressiv sein und warum genau dort?",
   tradeSetup:
     "Welche Struktur, in deinen Worten? Steht der Name über oder unter EMA10/EMA20? Tight and orderly — oder Barcode? Wie eng waren die letzten zwei bis drei Sessions?",
   tradeTriggerTactic:
@@ -62,11 +60,14 @@ export const SHADOW_TEXTS = {
   guardrailsNote:
     "Limit, Risiko, Quelle, Stops — was hat gehalten, was nicht? Bewusster Override zählt als eingehalten, wenn er als solcher deklariert ist.",
   selfGrade: "Deutsche Schulnote, Prozess nicht PnL. Ein grüner Tag kann eine 4 sein, ein roter eine 1.",
-  watchlistNext: "Welche Namen sind reif — und in welche Richtung? Was steht schon in Position und braucht morgen eine Entscheidung?",
-  nextSessionPlan:
-    "Stärke oder Rücksetzer? Wo willst du aggressiv sein, wo gar nicht? Welche Taktik pro Name, und was muss passieren, damit du NICHT klickst? Was ist heute liegengeblieben, das morgen zuerst drankommt?",
+  // v2.1: Ausblick moved from block 6 (tomorrow's session) to block 2
+  // (today's session, filled in the morning) — wording updated from
+  // "morgen"/"gestern" framing to "heute"/"gestern" accordingly.
+  watchlist: "Welche Namen sind reif — und in welche Richtung? Was steht schon in Position und braucht heute eine Entscheidung?",
+  sessionPlan:
+    "Stärke oder Rücksetzer? Wo willst du aggressiv sein, wo gar nicht? Welche Taktik pro Name, und was muss passieren, damit du NICHT klickst? Was ist gestern liegengeblieben, das heute zuerst drankommt? Wie fühlst du dich vor dem Open?",
   opportunitySpike:
-    "Welche Gruppe, welches Setup, welche frische Traktion würden morgen mehr Risk rechtfertigen? Eine Zeile genügt. Wenn nichts davon eintritt: Standard-Risk. Bedingung vorher aufschreiben, nicht hinterher begründen.",
+    "Welche Gruppe, welches Setup, welche frische Traktion würden heute mehr Risk rechtfertigen? Eine Zeile genügt. Wenn nichts davon eintritt: Standard-Risk. Bedingung vorher aufschreiben, nicht hinterher begründen.",
 } as const;
 
 /** Uppercase-trims a ticker input. Empty string means "not a valid ticker". */

@@ -44,7 +44,7 @@ export default async function ShadowlistPage({ searchParams }: { searchParams: P
     );
   }
 
-  const entries = await getShadowlistEntries(tradeDate, dataResult.data.watchlistToday);
+  const entries = await getShadowlistEntries(tradeDate, dataResult.data.watchlist);
 
   return (
     <div>

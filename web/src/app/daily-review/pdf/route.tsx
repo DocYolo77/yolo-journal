@@ -25,10 +25,10 @@ export async function GET(request: Request) {
 
   try {
     const data = dataResult.data;
-    const shadowlist = await getShadowlistEntries(tradeDate, data.watchlistToday);
+    const shadowlist = await getShadowlistEntries(tradeDate, data.watchlist);
 
     const chartImages = await Promise.all(
-      data.watchlistToday.map(async (item) => {
+      data.watchlist.map(async (item) => {
         const series = await getDailyChartSeries(item.ticker, tradeDate);
         return { ticker: item.ticker, dataUri: await svgToPngDataUri(renderDailyChartSvg(item.ticker, series)) };
       })

@@ -172,29 +172,35 @@ export type DailyReviewRow = {
   personal_state: string | null;
   /** Half-steps are a real input (3.5 has occurred). */
   focus_level: number | null;
-  gameplan: string | null;
 
   what_went_well: string | null;
   what_went_wrong: string | null;
   what_to_improve: string | null;
   guardrails_note: string | null;
 
-  next_session_plan: string | null;
-  /** Pre-declared condition for taking more than standard risk tomorrow — written before the fact, not justified after. */
+  /**
+   * Renamed from next_session_plan in 20260909000000 — v2.1 moves this
+   * block from position 6 (describing tomorrow's session) to position
+   * 2 (describing *today's* session, filled in the morning). The old
+   * `gameplan` column still exists in the DB (the v2.1 spec's schema
+   * section didn't call for dropping it, only for this rename) but
+   * nothing in the app reads or writes it anymore — its content is
+   * folded into this field instead.
+   */
+  session_plan: string | null;
+  /** Pre-declared condition for taking more than standard risk *today* (was "tomorrow" pre-v2.1) — written before the fact, not justified after. */
   opportunity_spike: string | null;
 
   created_at: string;
   updated_at: string;
 };
 
-export type DailyReviewWatchlistScope = "today" | "next";
-
 export type DailyReviewWatchlistRow = {
   id: string;
   user_id: string | null;
   review_id: string;
 
-  scope: DailyReviewWatchlistScope;
+  /** No more today/next split as of 20260909000000 — one list per day. */
   ticker: string;
   sort_order: number;
   taken: boolean;

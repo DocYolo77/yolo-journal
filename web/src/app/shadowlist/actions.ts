@@ -18,6 +18,6 @@ export async function exportShadowlistPngAction(
   if (dataResult.error || !dataResult.data) {
     return { data: null, error: dataResult.error ?? "Shadowlist konnte nicht geladen werden." };
   }
-  const entries: ShadowlistEntry[] = await getShadowlistEntries(tradeDate, dataResult.data.watchlistToday);
+  const entries: ShadowlistEntry[] = await getShadowlistEntries(tradeDate, dataResult.data.watchlist);
   return buildShadowlistStoryPng(tradeDate, entries);
 }

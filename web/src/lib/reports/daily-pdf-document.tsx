@@ -75,7 +75,7 @@ export function DailyReviewPdfDocument({
   shadowlist: ShadowlistEntry[];
   chartImages: { ticker: string; dataUri: string }[];
 }) {
-  const { review, watchlistToday, watchlistNext, trades, guardrails } = data;
+  const { review, watchlist, trades, guardrails } = data;
 
   return (
     <Document>
@@ -87,22 +87,26 @@ export function DailyReviewPdfDocument({
           {review.risk_pct != null ? <DetailRow label="Risk %" value={fmt(review.risk_pct)} /> : null}
           {review.r_value_usd != null ? <DetailRow label="1R USD" value={fmt(review.r_value_usd)} /> : null}
           {review.nlv_close != null ? <DetailRow label="NLV Close" value={fmt(review.nlv_close)} /> : null}
-          {watchlistToday.length > 0 ? (
-            <DetailRow label="Watchlist" value={watchlistToday.map((w) => w.ticker).join(", ")} />
-          ) : null}
+          {watchlist.length > 0 ? <DetailRow label="Watchlist" value={watchlist.map((w) => w.ticker).join(", ")} /> : null}
         </Section>
 
-        {review.market_context || review.personal_state || review.focus_level != null ? (
-          <Section title="Kontext">
-            {review.market_context ? <Text style={styles.paragraph}>Marktumgebung: {review.market_context}</Text> : null}
-            {review.personal_state ? <Text style={styles.paragraph}>Persönliche Lage / Mentales: {review.personal_state}</Text> : null}
-            {review.focus_level != null ? <DetailRow label="Fokus" value={`${fmt(review.focus_level, 1)}/5`} /> : null}
+        {review.session_plan || review.opportunity_spike ? (
+          <Section title="Plan & Gedankengänge für die heutige Session">
+            {review.session_plan ? <Text style={styles.paragraph}>{review.session_plan}</Text> : null}
+            {review.opportunity_spike ? <DetailRow label="Opportunity Spike" value={review.opportunity_spike} /> : null}
           </Section>
         ) : null}
 
-        {review.gameplan ? (
-          <Section title="Gameplan">
-            <Text style={styles.paragraph}>{review.gameplan}</Text>
+        {review.market_context ? (
+          <Section title="Marktumgebung">
+            <Text style={styles.paragraph}>{review.market_context}</Text>
+          </Section>
+        ) : null}
+
+        {review.personal_state || review.focus_level != null ? (
+          <Section title="Persönliche Lage / Mentales">
+            {review.personal_state ? <Text style={styles.paragraph}>{review.personal_state}</Text> : null}
+            {review.focus_level != null ? <DetailRow label="Fokus" value={`${fmt(review.focus_level, 1)}/5`} /> : null}
           </Section>
         ) : null}
 
@@ -183,16 +187,6 @@ export function DailyReviewPdfDocument({
               );
             })}
             {review.guardrails_note ? <Text style={styles.paragraph}>{review.guardrails_note}</Text> : null}
-          </Section>
-        ) : null}
-
-        {watchlistNext.length > 0 || review.next_session_plan || review.opportunity_spike ? (
-          <Section title="Plan für die nächste Session">
-            {watchlistNext.length > 0 ? (
-              <DetailRow label="Watchlist" value={watchlistNext.map((w) => w.ticker).join(", ")} />
-            ) : null}
-            {review.opportunity_spike ? <DetailRow label="Opportunity Spike" value={review.opportunity_spike} /> : null}
-            {review.next_session_plan ? <Text style={styles.paragraph}>{review.next_session_plan}</Text> : null}
           </Section>
         ) : null}
       </Page>

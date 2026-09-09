@@ -50,7 +50,7 @@ export default async function DailyReviewPage({ searchParams }: { searchParams: 
     );
   }
 
-  const { review, watchlistToday, watchlistNext, trades, guardrails, priorSessionPlanHint } = dataResult.data;
+  const { review, watchlist, trades, guardrails } = dataResult.data;
 
   return (
     <div>
@@ -63,11 +63,9 @@ export default async function DailyReviewPage({ searchParams }: { searchParams: 
         key={tradeDate}
         tradeDate={tradeDate}
         review={review}
-        watchlistToday={watchlistToday}
-        watchlistNext={watchlistNext}
+        watchlist={watchlist}
         trades={trades}
         guardrails={guardrails}
-        priorSessionPlanHint={priorSessionPlanHint}
         tradeFieldSuggestions={{ setup: setupSuggestions, trigger_tactic: triggerSuggestions, stop_logic: stopLogicSuggestions }}
       />
     </div>

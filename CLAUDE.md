@@ -49,10 +49,12 @@ One main table plus three child tables (all under `daily_reviews`'s new v2 shape
 `supabase/migrations/20260908000000_v2_capture_tool_rewrite.sql` for the authoritative
 definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
 
-- `daily_reviews` — one row per `trade_date`, every field but `trade_date` optional.
-- `daily_review_watchlist` — ticker chips, `scope` `'today'` or `'next'`, carries `taken`
-  and `note` directly (this **is** the Shadowlist's data source — there is no separate
-  shadowlist table).
+- `daily_reviews` — one row per `trade_date`, every field but `trade_date` optional. Has an
+  orphaned `gameplan` column left over from pre-v2.1 (see Product invariants below) — nothing
+  reads or writes it; don't resurrect it as a separate field.
+- `daily_review_watchlist` — ticker chips, one list per day (no `scope` split as of v2.1 —
+  that column was dropped), carries `taken` and `note` directly (this **is** the Shadowlist's
+  data source — there is no separate shadowlist table).
 - `daily_review_trades` — repeatable trade cards, all free text, no enums.
 - `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
   not "held."
@@ -85,10 +87,13 @@ bearing for Weekly Review.
 - Guardrails are a fixed nine-key click-list, four states (Eingehalten / Verletzt / Bewusster
   Override / n. a.), default empty. This is documentation, not enforcement — nothing is
   blocked, nothing is validated, no note is derived from a status.
-- The watchlist-for-tomorrow (`scope='next'`) gets copied forward as tomorrow's
-  watchlist-for-today when that review is first opened — a copy, not a link, so editing one
-  list never touches the other. The prior day's plan shows as a read-only hint above Gameplan,
-  never as an editable field.
+- The page is opened twice on the same trade_date, same row both times: in the morning for
+  the Kopf watchlist and "Plan & Gedankengänge für die heutige Session" block (`session_plan` +
+  `opportunity_spike`), in the evening for Marktumgebung, Persönliche Lage/Mentales,
+  Ticker-Karten, and Fazit. No lock, no time gate — every block stays editable all day; the
+  morning plan can still be changed in the evening, and that's fine (v2.1 removed the earlier
+  watchlist-prefill/carry-forward mechanic entirely — there is no more "tomorrow's watchlist"
+  concept and no cross-day copy).
 - The Markdown export ("Für Claude kopieren") is the most important output of the page: fixed
   section order, empty fields/sections omitted entirely, no interpretation or summarization.
   Treat any change to its format as a breaking change to something else (an LLM chat) that

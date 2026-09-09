@@ -2,7 +2,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type {
   DailyReviewRow,
   DailyReviewWatchlistRow,
-  DailyReviewWatchlistScope,
   DailyReviewTradeRow,
   DailyReviewGuardrailRow,
   DailyReviewGuardrailStatus,
@@ -11,69 +10,28 @@ import { DAILY_REVIEW_GUARDRAILS, GUARDRAIL_STATUS_LABELS } from "@/lib/validati
 
 // v2 Daily Review data layer — a pure capture tool. Every function here
 // stores or retrieves inputs; none of them judge, enforce, or compute.
-// See CLAUDE.md / the "Umbau-Anweisung v2" spec for the product
+// See CLAUDE.md / the "Umbau-Anweisung v2"+v2.1 specs for the product
 // rationale, and lib/weekly-review/{fetch,compute}.ts for the separate,
 // untouched pre-v2 data layer Weekly Review still reads.
-
-type SupabaseAdminClient = ReturnType<typeof getSupabaseAdmin>;
+//
+// v2.1 removed the watchlist today/next split and the prior-review
+// carry-forward prefill entirely — one watchlist per day, entered in
+// the morning, no lock, no copy mechanic.
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 
 export type DailyReviewData = {
   review: DailyReviewRow;
-  watchlistToday: DailyReviewWatchlistRow[];
-  watchlistNext: DailyReviewWatchlistRow[];
+  watchlist: DailyReviewWatchlistRow[];
   trades: DailyReviewTradeRow[];
   guardrails: DailyReviewGuardrailRow[];
-  /**
-   * The most recent earlier review's next_session_plan — a read-only
-   * reminder shown above the Gameplan field (§3.1a: "Dein Plan von
-   * gestern Abend: …"), never copied into a field or persisted onto
-   * this review.
-   */
-  priorSessionPlanHint: string | null;
 };
 
-async function findPriorReview(
-  supabase: SupabaseAdminClient,
-  tradeDate: string
-): Promise<{ id: string; next_session_plan: string | null } | null> {
-  const { data } = await supabase
-    .from("daily_reviews")
-    .select("id, next_session_plan")
-    .lt("trade_date", tradeDate)
-    .order("trade_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data as { id: string; next_session_plan: string | null } | null) ?? null;
-}
-
-/** §3.1a prefill: copies the prior review's scope='next' tickers into the new review as scope='today' — a copy, not a link, so both lists survive independently. */
-async function copyForwardWatchlist(supabase: SupabaseAdminClient, priorReviewId: string, newReviewId: string): Promise<void> {
-  const { data: nextItems } = await supabase
-    .from("daily_review_watchlist")
-    .select("ticker, sort_order")
-    .eq("review_id", priorReviewId)
-    .eq("scope", "next")
-    .order("sort_order");
-
-  if (!nextItems || nextItems.length === 0) return;
-
-  await supabase.from("daily_review_watchlist").insert(
-    nextItems.map((item) => ({
-      review_id: newReviewId,
-      scope: "today" as const,
-      ticker: item.ticker as string,
-      sort_order: item.sort_order as number,
-    }))
-  );
-}
-
 /**
- * Gets the daily_reviews row for tradeDate, creating it (with the
- * §3.1a watchlist prefill) if it doesn't exist yet. Idempotent under
- * concurrent calls via unique(trade_date) + a unique-violation retry,
- * same pattern as the rest of this codebase's insert-based idempotency.
+ * Gets the daily_reviews row for tradeDate, creating an empty one if
+ * it doesn't exist yet. Idempotent under concurrent calls via
+ * unique(trade_date) + a unique-violation retry, same pattern as the
+ * rest of this codebase's insert-based idempotency.
  */
 export async function getOrCreateDailyReview(
   tradeDate: string
@@ -95,8 +53,6 @@ export async function getOrCreateDailyReview(
     if (existing) {
       return { data: existing as DailyReviewRow, error: null };
     }
-
-    const prior = await findPriorReview(supabase, tradeDate);
 
     const { data: inserted, error: insertError } = await supabase
       .from("daily_reviews")
@@ -121,10 +77,6 @@ export async function getOrCreateDailyReview(
       return { data: null, error: "Daily Review konnte nicht angelegt werden." };
     }
 
-    if (prior) {
-      await copyForwardWatchlist(supabase, prior.id, inserted.id as string);
-    }
-
     return { data: inserted as DailyReviewRow, error: null };
   } catch (e) {
     console.error("getOrCreateDailyReview failed", e);
@@ -144,23 +96,18 @@ export async function getDailyReviewData(
   try {
     const supabase = getSupabaseAdmin();
 
-    const [{ data: watchlist }, { data: trades }, { data: guardrails }, prior] = await Promise.all([
+    const [{ data: watchlist }, { data: trades }, { data: guardrails }] = await Promise.all([
       supabase.from("daily_review_watchlist").select("*").eq("review_id", review.id).order("sort_order"),
       supabase.from("daily_review_trades").select("*").eq("review_id", review.id).order("sort_order"),
       supabase.from("daily_review_guardrails").select("*").eq("review_id", review.id),
-      findPriorReview(supabase, tradeDate),
     ]);
-
-    const allWatchlist = (watchlist ?? []) as DailyReviewWatchlistRow[];
 
     return {
       data: {
         review,
-        watchlistToday: allWatchlist.filter((w) => w.scope === "today"),
-        watchlistNext: allWatchlist.filter((w) => w.scope === "next"),
+        watchlist: (watchlist ?? []) as DailyReviewWatchlistRow[],
         trades: (trades ?? []) as DailyReviewTradeRow[],
         guardrails: (guardrails ?? []) as DailyReviewGuardrailRow[],
-        priorSessionPlanHint: prior?.next_session_plan ?? null,
       },
       error: null,
     };
@@ -180,17 +127,16 @@ export type DailyReviewFieldPatch = Partial<
     | "market_context"
     | "personal_state"
     | "focus_level"
-    | "gameplan"
     | "what_went_well"
     | "what_went_wrong"
     | "what_to_improve"
     | "guardrails_note"
-    | "next_session_plan"
+    | "session_plan"
     | "opportunity_spike"
   >
 >;
 
-/** Generic partial update of the flat daily_reviews columns — the autosave target for every text/number field in blocks 1-3, 5, 6. */
+/** Generic partial update of the flat daily_reviews columns — the autosave target for every text/number field in blocks 1, 2, 3, 4, 6. */
 export async function updateDailyReviewFields(reviewId: string, patch: DailyReviewFieldPatch): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
@@ -208,7 +154,6 @@ export async function updateDailyReviewFields(reviewId: string, patch: DailyRevi
 
 export async function addWatchlistTicker(
   reviewId: string,
-  scope: DailyReviewWatchlistScope,
   ticker: string
 ): Promise<{ data: DailyReviewWatchlistRow; error: null } | { data: null; error: string }> {
   try {
@@ -217,14 +162,13 @@ export async function addWatchlistTicker(
       .from("daily_review_watchlist")
       .select("sort_order")
       .eq("review_id", reviewId)
-      .eq("scope", scope)
       .order("sort_order", { ascending: false })
       .limit(1);
     const nextSortOrder = lastRow && lastRow.length > 0 ? (lastRow[0].sort_order as number) + 1 : 0;
 
     const { data, error } = await supabase
       .from("daily_review_watchlist")
-      .insert({ review_id: reviewId, scope, ticker, sort_order: nextSortOrder })
+      .insert({ review_id: reviewId, ticker, sort_order: nextSortOrder })
       .select("*")
       .single();
 
@@ -416,23 +360,30 @@ function plainNumber(value: number | null): string {
 }
 
 /**
- * §5.2 — the Markdown export ("Für Claude kopieren"), the most
+ * §5 (v2.1) — the Markdown export ("Für Claude kopieren"), the most
  * important output of the whole page. Fixed section order, empty
- * fields omitted entirely (not rendered as "—"), no interpretation or
- * summarization — a pure passthrough of whatever was captured.
+ * fields/sections omitted entirely (not rendered as "—"), no
+ * interpretation or summarization — a pure passthrough of whatever was
+ * captured. A review exported in the morning (Kopf + Block 2 only) is
+ * a valid, useful partial export, not an error state.
  */
 export function buildMarkdownExport(data: DailyReviewData): string {
-  const { review, watchlistToday, watchlistNext, trades, guardrails } = data;
+  const { review, watchlist, trades, guardrails } = data;
   const lines: string[] = [`# Daily Review — ${formatGermanDate(review.trade_date)}`];
 
   const kopfLines: string[] = [];
   if (review.risk_pct !== null) kopfLines.push(`- Risk: ${plainNumber(review.risk_pct)} %`);
   if (review.r_value_usd !== null) kopfLines.push(`- 1R: ${plainNumber(review.r_value_usd)} USD`);
   if (review.nlv_close !== null) kopfLines.push(`- NLV Close: ${plainNumber(review.nlv_close)} USD`);
-  if (watchlistToday.length > 0) kopfLines.push(`- Watchlist: ${watchlistToday.map((w) => w.ticker).join(", ")}`);
-  const takenTickers = watchlistToday.filter((w) => w.taken);
+  if (watchlist.length > 0) kopfLines.push(`- Watchlist: ${watchlist.map((w) => w.ticker).join(", ")}`);
+  const takenTickers = watchlist.filter((w) => w.taken);
   if (takenTickers.length > 0) kopfLines.push(`- Genommen: ${takenTickers.map((w) => w.ticker).join(", ")}`);
   if (kopfLines.length > 0) lines.push("## Kopf", ...kopfLines);
+
+  const planLines: string[] = [];
+  if (review.session_plan) planLines.push(review.session_plan);
+  if (review.opportunity_spike) planLines.push(`- Opportunity Spike: ${review.opportunity_spike}`);
+  if (planLines.length > 0) lines.push("## Plan & Gedankengänge für die heutige Session", ...planLines);
 
   if (review.market_context) lines.push("## Marktumgebung", review.market_context);
 
@@ -440,8 +391,6 @@ export function buildMarkdownExport(data: DailyReviewData): string {
   if (review.personal_state) personalLines.push(review.personal_state);
   if (review.focus_level !== null) personalLines.push(`Fokus: ${plainNumber(review.focus_level)}/5`);
   if (personalLines.length > 0) lines.push("## Persönliche Lage / Mentales", ...personalLines);
-
-  if (review.gameplan) lines.push("## Gameplan", review.gameplan);
 
   const tradesWithTicker = trades.filter((t) => t.ticker.trim() !== "");
   if (tradesWithTicker.length > 0) {
@@ -475,12 +424,6 @@ export function buildMarkdownExport(data: DailyReviewData): string {
     lines.push("## Guardrails", ...guardrailLines);
     if (review.guardrails_note) lines.push(review.guardrails_note);
   }
-
-  const nextLines: string[] = [];
-  if (watchlistNext.length > 0) nextLines.push(`- Watchlist: ${watchlistNext.map((w) => w.ticker).join(", ")}`);
-  if (review.opportunity_spike) nextLines.push(`- Opportunity Spike: ${review.opportunity_spike}`);
-  if (review.next_session_plan) nextLines.push(review.next_session_plan);
-  if (nextLines.length > 0) lines.push("## Plan für die nächste Session", ...nextLines);
 
   return lines.join("\n");
 }

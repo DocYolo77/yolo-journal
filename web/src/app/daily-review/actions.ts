@@ -17,7 +17,7 @@ import {
   type DailyReviewFieldPatch,
   type TradeAutocompleteField,
 } from "@/lib/data/daily-review";
-import type { DailyReviewGuardrailStatus, DailyReviewWatchlistScope } from "@/lib/supabase/types";
+import type { DailyReviewGuardrailStatus } from "@/lib/supabase/types";
 
 // Thin server-action wrappers around lib/data/daily-review.ts, called
 // directly from the client autosave logic in daily-review-form.tsx
@@ -30,8 +30,8 @@ export async function updateReviewFieldsAction(reviewId: string, patch: DailyRev
   return result;
 }
 
-export async function addWatchlistTickerAction(reviewId: string, scope: DailyReviewWatchlistScope, ticker: string) {
-  const result = await addWatchlistTicker(reviewId, scope, ticker);
+export async function addWatchlistTickerAction(reviewId: string, ticker: string) {
+  const result = await addWatchlistTicker(reviewId, ticker);
   if (!result.error) revalidatePath("/daily-review");
   return result;
 }
@@ -56,7 +56,16 @@ export async function addTradeCardAction(reviewId: string) {
 
 export async function updateTradeCardAction(
   id: string,
-  patch: Partial<{ ticker: string; setup: string; trigger_tactic: string; stop_logic: string; what_happened: string; my_thinking: string }>
+  patch: Partial<{
+    ticker: string;
+    setup: string;
+    trigger_tactic: string;
+    stop_logic: string;
+    what_happened: string;
+    management: string;
+    stop_now: string;
+    my_thinking: string;
+  }>
 ) {
   const result = await updateTradeCard(id, patch);
   if (!result.error) revalidatePath("/daily-review");
