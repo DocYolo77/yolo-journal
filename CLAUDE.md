@@ -24,9 +24,11 @@ process notes to the app itself — that is deliberately out of scope now.
 **Daily Review (single page, always editable) → Shadowlist (decoupled) → Markdown export
 ("Für Claude kopieren") / PDF export**
 
-Weekly Review and the Archive are still live but were deliberately left untouched by the v2
-rewrite (see "Weekly Review is out of scope" below) — they will get their own separate rework
-later. Monthly Review and Rules & Timeline remain unbuilt placeholders, same as before.
+**Weekly Review (single page, always editable) → Markdown export ("Für Claude kopieren")**,
+same capture-only philosophy as Daily Review — see "Weekly Review v2" below. This was the
+explicit rework the original v2 spec deferred; it's done now (as of 2026-09-13), not still
+pending. The Archive is still live and lists both. Monthly Review and Rules & Timeline remain
+unbuilt placeholders, same as before.
 
 ## What was removed in v2 (do not re-add without a fresh product decision)
 
@@ -59,19 +61,33 @@ definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
 - `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
   not "held."
 
-**Weekly Review is out of scope for v2 and reads a separate, older data shape on purpose:**
-`lib/weekly-review/{fetch,compute}.ts` still query `commitments`, `campaigns`,
+## Weekly Review v2
+
+As of 2026-09-13, Weekly Review got the same rework Daily Review got in the original v2 spec:
+the page stopped computing anything (no Kennzahlen, no Guardrail-Auswertung, no Shadow Log, no
+R-Ergebnisse) and now only captures what exists purely in the user's own head — the analysis
+happens in an LLM chat instead, fed by the week's Daily Review Markdown exports plus live
+IBKR/market data. The old aggregation engine (`lib/weekly-review/{aggregate,compute,fetch,
+repetition,legacy-guardrails}.ts`, `lib/campaigns/realized-pnl.ts`), the DRAFT/FINAL finalize
+flow, and `weekly_report_snapshots` are gone entirely — same "always editable, no separate
+final state" model as Daily Review, no PDF export (only "Für Claude kopieren" — the spec never
+asked for one).
+
+`weekly_reviews` (one row per ISO calendar week, keyed on `(iso_year, iso_week)`) plus three
+child tables — `weekly_review_trades` (repeatable Trade-Karten), `weekly_review_missed`
+(repeatable Missed-Review/A+ Pattern Recognition cards), and `weekly_review_demons` (the Demon
+Finder's eight fixed rows, same "default state is absent" pattern as `daily_review_guardrails`)
+— see `supabase/migrations/20260913000000_weekly_review_v2_rewrite.sql` for the authoritative
+shape and `web/src/lib/supabase/types.ts` for the hand-written TS mirror. Both `weekly_reviews`
+and `weekly_report_snapshots` had zero rows in production when this migration dropped and
+recreated them, so nothing needed to be preserved or migrated forward.
+
+The eight/nine tables Weekly Review used to read (`commitments`, `campaigns`,
 `campaign_executions`, `broker_executions`, `broker_account_snapshots`,
-`broker_positions_snapshots`, `daily_report_snapshots` (all still present, untouched, in the
-database — the v2 spec's literal "drop everything" instruction was overridden for these
-specific tables precisely because Weekly Review needs them) and the renamed
-`daily_reviews_legacy` / `shadowlist_decisions_legacy` tables (pure renames of the pre-v2
-`daily_reviews` / `shadowlist_decisions` tables — same data, same shape, only the table name
-changed so the clean names were free for the new v2 schema). **Do not touch any of these eight
-tables, or `lib/weekly-review/*`, `lib/campaigns/realized-pnl.ts`, or
-`lib/weekly-review/legacy-guardrails.ts`, without first re-deciding Weekly Review's own rework
-as its own explicit task.** They are dead weight from the Daily Review's perspective but load-
-bearing for Weekly Review.
+`broker_positions_snapshots`, `daily_report_snapshots`, `daily_reviews_legacy`,
+`shadowlist_decisions_legacy`) are now fully orphaned — nothing in the app reads them anymore.
+They are deliberately left untouched in the database; dropping them is a separate decision
+nobody has made yet, not an oversight.
 
 ## Product invariants (v2)
 
@@ -102,6 +118,10 @@ bearing for Weekly Review.
   snapshot row. Filename convention: `Daily_Review_YYYY-MM-DD.pdf`.
 - `nlv_close` is optional by design — the value is meant to be pulled live from the broker in
   the LLM chat, not hand-typed here.
+- Weekly Review follows the identical autosave/no-lock/Markdown-export model — see "Weekly
+  Review v2" above. Ticker fields there get autocomplete from history (Daily Review's own
+  trades plus past Weekly cards); every other field is free text or one of the fixed option
+  lists in `lib/validation/weekly-review.ts`, never a rebuilt enum.
 
 ## Technical base
 
@@ -118,12 +138,15 @@ bearing for Weekly Review.
 Do NOT alter existing migration files — new schema changes are always a new migration file,
 never an edit to a committed one. Before dropping or restructuring any table:
 
-1. Check whether Weekly Review (`lib/weekly-review/*`) reads it, directly or through
-   `lib/campaigns/realized-pnl.ts`. If it does, do not drop or reshape it without first
-   reconciling that dependency (rename-and-recreate under the old name, same as the v2
-   migration did, is usually the right move rather than breaking Weekly Review).
-2. Show the proposal before applying destructive schema changes.
-3. Back up affected data first if it's non-trivial and irreversible.
+1. Show the proposal before applying destructive schema changes.
+2. Back up affected data first if it's non-trivial and irreversible — or confirm via a live
+   row-count query that there's nothing to preserve, same check done before both the v2 Daily
+   Review rewrite and the Weekly Review v2 rewrite.
+3. The nine now-orphaned legacy tables (`commitments`, `campaigns`, `campaign_executions`,
+   `broker_executions`, `broker_account_snapshots`, `broker_positions_snapshots`,
+   `daily_report_snapshots`, `daily_reviews_legacy`, `shadowlist_decisions_legacy`) are nobody's
+   dependency anymore, but dropping them is still a separate, explicit decision — not something
+   to do as a drive-by cleanup on an unrelated task.
 
 ## Safety
 
@@ -134,15 +157,14 @@ Never:
 - import the secret-key client into Client Components
 - log secrets
 - rewrite migration history
-- silently overwrite locked historical decisions (there is no more "locked" concept in v2,
-  but this still applies to Weekly Review's `weekly_reviews`/`weekly_report_snapshots`
-  FINAL state)
+- silently overwrite locked historical decisions (there is no more "locked"/FINAL concept
+  anywhere in the app now — Daily Review and Weekly Review are both always editable)
 
 ## Working principle
 
 > Reproduce the real Journal OS first. Improve it later.
 
-This principle guided the original V7.4.3 migration. It has been superseded for the Daily
-Review by the v2 capture-tool direction above — do not resurrect the old Commitment/Lock/
-IBKR-reconcile invariants there. It still applies, unchanged, to Weekly Review and Monthly
-Review until they get their own explicit rework.
+This principle guided the original V7.4.3 migration. It has been superseded for Daily Review
+and Weekly Review by the v2 capture-tool direction above — do not resurrect the old Commitment/
+Lock/IBKR-reconcile invariants there. It still applies, unchanged, to Monthly Review until it
+gets its own explicit rework.

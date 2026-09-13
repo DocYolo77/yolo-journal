@@ -61,48 +61,35 @@ export async function getArchiveEntries(): Promise<
 export type WeeklyArchiveEntry = {
   weekStart: string;
   weekEnd: string;
-  status: string;
-  isFinal: boolean;
-  processGrade: string | null;
+  isoYear: number;
+  isoWeek: number;
+  selfGrade: string | null;
 };
 
-/** Weekly Review rows for the Archiv page — merges weekly_reviews (DRAFT/FINAL) with weekly_report_snapshots (FINAL only). */
+/** Weekly Review rows for the Archiv page — v2 is always editable, there is no DRAFT/FINAL split or snapshot to merge. */
 export async function getWeeklyArchiveEntries(): Promise<
   { data: WeeklyArchiveEntry[]; error: null } | { data: null; error: string }
 > {
   try {
     const supabase = getSupabaseAdmin();
 
-    const [{ data: reviews, error: reviewsError }, { data: snapshots, error: snapshotsError }] = await Promise.all([
-      supabase
-        .from("weekly_reviews")
-        .select("week_start, week_end, status")
-        .order("week_start", { ascending: false })
-        .limit(LOOKBACK_LIMIT),
-      supabase
-        .from("weekly_report_snapshots")
-        .select("week_start, snapshot")
-        .order("week_start", { ascending: false })
-        .limit(LOOKBACK_LIMIT),
-    ]);
+    const { data: reviews, error } = await supabase
+      .from("weekly_reviews")
+      .select("week_start, week_end, iso_year, iso_week, self_grade")
+      .order("week_start", { ascending: false })
+      .limit(LOOKBACK_LIMIT);
 
-    if (reviewsError || snapshotsError) {
-      console.error("getWeeklyArchiveEntries: base lookup failed", reviewsError, snapshotsError);
+    if (error) {
+      console.error("getWeeklyArchiveEntries: base lookup failed", error);
       return { data: null, error: "Wochen-Archiv konnte nicht geladen werden." };
-    }
-
-    const finalByWeekStart = new Map<string, string | null>();
-    for (const row of snapshots ?? []) {
-      const snapshot = row.snapshot as { manual?: { process_grade?: string | null } };
-      finalByWeekStart.set(row.week_start as string, snapshot.manual?.process_grade ?? null);
     }
 
     const entries: WeeklyArchiveEntry[] = (reviews ?? []).map((r) => ({
       weekStart: r.week_start as string,
       weekEnd: r.week_end as string,
-      status: r.status as string,
-      isFinal: finalByWeekStart.has(r.week_start as string),
-      processGrade: finalByWeekStart.get(r.week_start as string) ?? null,
+      isoYear: r.iso_year as number,
+      isoWeek: r.iso_week as number,
+      selfGrade: r.self_grade as string | null,
     }));
 
     entries.sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));

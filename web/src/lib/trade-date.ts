@@ -52,3 +52,15 @@ export function getTradingWeekBounds(dateStr: string): { weekStart: string; week
 export function shiftTradingWeek(weekStartStr: string, weeks: number): string {
   return shiftTradeDate(weekStartStr, weeks * 7);
 }
+
+/** ISO-8601 (year, week) for a YYYY-MM-DD date — the standard "Thursday of this week" trick. */
+export function getIsoWeek(dateStr: string): { isoYear: number; isoWeek: number } {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const dayNum = d.getUTCDay() || 7; // Monday = 1 .. Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Thursday of the same ISO week
+  const isoYear = d.getUTCFullYear();
+  const yearStart = Date.UTC(isoYear, 0, 1);
+  const isoWeek = Math.ceil(((d.getTime() - yearStart) / 86400000 + 1) / 7);
+  return { isoYear, isoWeek };
+}
