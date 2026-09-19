@@ -134,6 +134,12 @@ export type WeeklyReviewFieldPatch = Partial<
     | "nicht_gehandelt"
     | "verpasst"
     | "guter_skip"
+    | "shadowlist_ticker"
+    | "daily_selection"
+    | "weekly_leadership"
+    | "diskretion_vs_random"
+    | "hauptbefund"
+    | "research_fragen"
     | "gemeinsame_eigenschaften"
     | "worst_trade_ticker"
     | "worst_trade_text"
@@ -381,10 +387,8 @@ const ROLE_LABELS = {
 /**
  * §5 — the Markdown export ("Für Claude kopieren"). Fixed section order,
  * empty fields/sections omitted entirely, no interpretation or
- * summarization. Block 6 is a deliberate gap (Shadow Log — computed in
- * the LLM chat, not here) and never appears, not even as an empty
- * heading. Block 12 always appears, verbatim, even on an otherwise empty
- * week.
+ * summarization. Block 12 always appears, verbatim, even on an otherwise
+ * empty week.
  */
 export function buildWeeklyMarkdownExport(data: WeeklyReviewData): string {
   const { review, trades, missed, demons } = data;
@@ -434,7 +438,14 @@ export function buildWeeklyMarkdownExport(data: WeeklyReviewData): string {
   if (review.guter_skip) universumLines.push(`- Guter Skip: ${review.guter_skip}`);
   if (universumLines.length > 0) lines.push("## 5 · Universum & Coverage", ...universumLines);
 
-  // Block 6 — Shadow Log. Deliberate gap, never rendered.
+  const shadowLogLines: string[] = [];
+  if (review.shadowlist_ticker) shadowLogLines.push(`- Ticker der Woche: ${review.shadowlist_ticker}`);
+  if (review.daily_selection) shadowLogLines.push(`- Daily Selection: ${review.daily_selection}`);
+  if (review.weekly_leadership) shadowLogLines.push(`- Weekly Leadership: ${review.weekly_leadership}`);
+  if (review.diskretion_vs_random) shadowLogLines.push(`- Diskretion vs. Random: ${review.diskretion_vs_random}`);
+  if (review.hauptbefund) shadowLogLines.push(`- Hauptbefund: ${review.hauptbefund}`);
+  if (review.research_fragen) shadowLogLines.push(`- Research-Frage für die nächsten Wochen: ${review.research_fragen}`);
+  if (shadowLogLines.length > 0) lines.push("## 6 · Shadowlist-Auswertung der Woche", ...shadowLogLines);
 
   const missedWithTicker = missed.filter((m) => m.ticker.trim() !== "");
   const missedLines: string[] = [];

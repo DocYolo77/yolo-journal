@@ -386,6 +386,13 @@ export type WeeklyReviewRow = {
   verpasst: string | null;
   guter_skip: string | null;
 
+  shadowlist_ticker: string | null;
+  daily_selection: string | null;
+  weekly_leadership: string | null;
+  diskretion_vs_random: string | null;
+  hauptbefund: string | null;
+  research_fragen: string | null;
+
   gemeinsame_eigenschaften: string | null;
 
   worst_trade_ticker: string | null;

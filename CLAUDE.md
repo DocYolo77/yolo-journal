@@ -89,6 +89,14 @@ The eight/nine tables Weekly Review used to read (`commitments`, `campaigns`,
 They are deliberately left untouched in the database; dropping them is a separate decision
 nobody has made yet, not an oversight.
 
+**Block 6 update (2026-09-19):** the "Shadow Log" numbering gap the 2026-09-13 rewrite left
+open is now filled — not with computation, but with six more flat free-text fields on
+`weekly_reviews` (`shadowlist_ticker`, `daily_selection`, `weekly_leadership`,
+`diskretion_vs_random`, `hauptbefund`, `research_fragen`, see
+`supabase/migrations/20260919000000_weekly_review_block6_shadow_log.sql`). The user pastes
+the week's shadowlist tickers and their own manual analysis of it by hand; the page still
+computes nothing itself.
+
 ## Product invariants (v2)
 
 - Every field except `trade_date` is optional. Empty fields never appear in exports.

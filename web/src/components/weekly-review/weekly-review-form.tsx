@@ -36,8 +36,7 @@ import {
 // Weekly Review v2 — one page, autosave every 800ms per field, no submit
 // button. Same architecture as components/daily-review/daily-review-form.tsx
 // (deliberately not shared code — each page owns its own small field
-// primitives, matching this codebase's existing convention). Block 6
-// (Shadow Log) is a deliberate gap: its number is never rendered here.
+// primitives, matching this codebase's existing convention).
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -634,6 +633,37 @@ export function WeeklyReviewForm({
   const [verpasst, onVerpasstChange] = useAutosaveTextWithContext(review.verpasst ?? "", (v) => saveField({ verpasst: v || null }), contextValue);
   const [guterSkip, onGuterSkipChange] = useAutosaveTextWithContext(review.guter_skip ?? "", (v) => saveField({ guter_skip: v || null }), contextValue);
 
+  const [shadowlistTicker, onShadowlistTickerChange] = useAutosaveTextWithContext(
+    review.shadowlist_ticker ?? "",
+    (v) => saveField({ shadowlist_ticker: v || null }),
+    contextValue
+  );
+  const [dailySelection, onDailySelectionChange] = useAutosaveTextWithContext(
+    review.daily_selection ?? "",
+    (v) => saveField({ daily_selection: v || null }),
+    contextValue
+  );
+  const [weeklyLeadership, onWeeklyLeadershipChange] = useAutosaveTextWithContext(
+    review.weekly_leadership ?? "",
+    (v) => saveField({ weekly_leadership: v || null }),
+    contextValue
+  );
+  const [diskretionVsRandom, onDiskretionVsRandomChange] = useAutosaveTextWithContext(
+    review.diskretion_vs_random ?? "",
+    (v) => saveField({ diskretion_vs_random: v || null }),
+    contextValue
+  );
+  const [hauptbefund, onHauptbefundChange] = useAutosaveTextWithContext(
+    review.hauptbefund ?? "",
+    (v) => saveField({ hauptbefund: v || null }),
+    contextValue
+  );
+  const [researchFragen, onResearchFragenChange] = useAutosaveTextWithContext(
+    review.research_fragen ?? "",
+    (v) => saveField({ research_fragen: v || null }),
+    contextValue
+  );
+
   const [gemeinsameEigenschaften, onGemeinsameEigenschaftenChange] = useAutosaveTextWithContext(
     review.gemeinsame_eigenschaften ?? "",
     (v) => saveField({ gemeinsame_eigenschaften: v || null }),
@@ -871,6 +901,27 @@ export function WeeklyReviewForm({
           </Field>
           <Field label="Guter Skip">
             <input value={guterSkip} onChange={(e) => onGuterSkipChange(e.target.value)} placeholder={WEEKLY_SHADOW_TEXTS.guterSkip} className={inputClass} />
+          </Field>
+        </Block>
+
+        <Block title="6 · Shadowlist-Auswertung der Woche">
+          <Field label="Ticker der Woche">
+            <ShadowTextarea value={shadowlistTicker} onChange={onShadowlistTickerChange} placeholder={WEEKLY_SHADOW_TEXTS.shadowlistTicker} rows={2} />
+          </Field>
+          <Field label="Daily Selection">
+            <ShadowTextarea value={dailySelection} onChange={onDailySelectionChange} placeholder={WEEKLY_SHADOW_TEXTS.dailySelection} />
+          </Field>
+          <Field label="Weekly Leadership">
+            <ShadowTextarea value={weeklyLeadership} onChange={onWeeklyLeadershipChange} placeholder={WEEKLY_SHADOW_TEXTS.weeklyLeadership} />
+          </Field>
+          <Field label="Diskretion vs. Random">
+            <ShadowTextarea value={diskretionVsRandom} onChange={onDiskretionVsRandomChange} placeholder={WEEKLY_SHADOW_TEXTS.diskretionVsRandom} rows={2} />
+          </Field>
+          <Field label="Hauptbefund">
+            <ShadowTextarea value={hauptbefund} onChange={onHauptbefundChange} placeholder={WEEKLY_SHADOW_TEXTS.hauptbefund} />
+          </Field>
+          <Field label="Research-Frage für die nächsten Wochen">
+            <ShadowTextarea value={researchFragen} onChange={onResearchFragenChange} placeholder={WEEKLY_SHADOW_TEXTS.researchFragen} rows={2} />
           </Field>
         </Block>
 

@@ -88,6 +88,13 @@ export const WEEKLY_SHADOW_TEXTS = {
   nichtGehandelt: "Kommagetrennt.",
   verpasst: "Kommagetrennt.",
   guterSkip: "Stark, aber kein Entry nach System. Kommagetrennt.",
+  shadowlistTicker: "Alle Ticker der Woche.",
+  dailySelection: "Für jeden Handelstag: welche Picks, und waren sie die Stärksten?",
+  weeklyLeadership:
+    "Tabelle der stärksten Werte der Shadowlist der Woche. Falls andere Werte stärker waren: verpasst, oder gab es keine Entry-Kriterien?",
+  diskretionVsRandom: "Kalkulationsergebnis: wo lag dein diskretionäres Picking?",
+  hauptbefund: "Analytischer Befund der Shadowlist und des Picking.",
+  researchFragen: "Fragen, die du in den nächsten Wochen weiterverfolgen solltest.",
   gemeinsameEigenschaften: "Was will ich visuell internalisieren?",
   worstTradeText: "Was hätte stattdessen passieren müssen?",
   wiederholungText: "Seit wann / wie oft?",
