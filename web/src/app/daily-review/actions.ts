@@ -62,9 +62,7 @@ export async function updateTradeCardAction(
     trigger_tactic: string;
     stop_logic: string;
     what_happened: string;
-    management: string;
-    stop_now: string;
-    my_thinking: string;
+    weitere_these: string;
   }>
 ) {
   const result = await updateTradeCard(id, patch);

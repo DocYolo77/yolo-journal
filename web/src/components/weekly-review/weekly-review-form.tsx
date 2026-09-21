@@ -28,6 +28,7 @@ import {
   removeMissedCardAction,
   removeWeeklyTradeCardAction,
   setDemonStateAction,
+  syncShadowlistTickerFromWatchlistAction,
   updateMissedCardAction,
   updateWeeklyReviewFieldsAction,
   updateWeeklyTradeCardAction,
@@ -638,6 +639,21 @@ export function WeeklyReviewForm({
     (v) => saveField({ shadowlist_ticker: v || null }),
     contextValue
   );
+  const [watchlistSyncState, setWatchlistSyncState] = useState<{ status: "idle" | "loading" | "error"; message?: string }>({
+    status: "idle",
+  });
+
+  async function handleSyncShadowlistTicker() {
+    setWatchlistSyncState({ status: "loading" });
+    const result = await syncShadowlistTickerFromWatchlistAction(review.id, review.week_start, review.week_end);
+    if (result.error) {
+      setWatchlistSyncState({ status: "error", message: result.error });
+      return;
+    }
+    onShadowlistTickerChange(result.data.join(", "));
+    setWatchlistSyncState({ status: "idle" });
+  }
+
   const [dailySelection, onDailySelectionChange] = useAutosaveTextWithContext(
     review.daily_selection ?? "",
     (v) => saveField({ daily_selection: v || null }),
@@ -907,6 +923,17 @@ export function WeeklyReviewForm({
         <Block title="6 · Shadowlist-Auswertung der Woche">
           <Field label="Ticker der Woche">
             <ShadowTextarea value={shadowlistTicker} onChange={onShadowlistTickerChange} placeholder={WEEKLY_SHADOW_TEXTS.shadowlistTicker} rows={2} />
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSyncShadowlistTicker}
+                disabled={watchlistSyncState.status === "loading"}
+                className="text-xs text-muted-foreground hover:text-accent disabled:opacity-50"
+              >
+                {watchlistSyncState.status === "loading" ? "Übernehme…" : "Aus Watchlist übernehmen"}
+              </button>
+              {watchlistSyncState.status === "error" ? <span className="text-xs text-negative">{watchlistSyncState.message}</span> : null}
+            </div>
           </Field>
           <Field label="Daily Selection">
             <ShadowTextarea value={dailySelection} onChange={onDailySelectionChange} placeholder={WEEKLY_SHADOW_TEXTS.dailySelection} />

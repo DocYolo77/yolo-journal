@@ -10,6 +10,7 @@ import {
   removeMissedCard,
   removeWeeklyTradeCard,
   setDemonState,
+  syncShadowlistTickerFromWatchlist,
   updateMissedCard,
   updateWeeklyReviewFields,
   updateWeeklyTradeCard,
@@ -79,6 +80,16 @@ export async function removeMissedCardAction(id: string) {
 
 export async function setDemonStateAction(reviewId: string, demonKey: string, aktiv: boolean, text: string | null) {
   const result = await setDemonState(reviewId, demonKey, aktiv, text);
+  if (!result.error) revalidatePath("/weekly-review");
+  return result;
+}
+
+export async function syncShadowlistTickerFromWatchlistAction(
+  reviewId: string,
+  weekStart: string,
+  weekEnd: string
+): Promise<{ data: string[]; error: string | null }> {
+  const result = await syncShadowlistTickerFromWatchlist(reviewId, weekStart, weekEnd);
   if (!result.error) revalidatePath("/weekly-review");
   return result;
 }

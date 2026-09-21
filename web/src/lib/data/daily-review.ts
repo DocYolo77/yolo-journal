@@ -124,19 +124,21 @@ export type DailyReviewFieldPatch = Partial<
     | "r_value_usd"
     | "nlv_close"
     | "self_grade"
-    | "market_context"
+    | "traction_recent_trades"
     | "personal_state"
     | "focus_level"
     | "what_went_well"
     | "what_went_wrong"
     | "what_to_improve"
+    | "post_session_review"
     | "guardrails_note"
     | "session_plan"
     | "opportunity_spike"
+    | "portfolio_management"
   >
 >;
 
-/** Generic partial update of the flat daily_reviews columns — the autosave target for every text/number field in blocks 1, 2, 3, 4, 6. */
+/** Generic partial update of the flat daily_reviews columns — the autosave target for every text/number field outside the repeatable trade cards. */
 export async function updateDailyReviewFields(reviewId: string, patch: DailyReviewFieldPatch): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
@@ -248,12 +250,7 @@ export async function addTradeCard(
 
 export async function updateTradeCard(
   id: string,
-  patch: Partial<
-    Pick<
-      DailyReviewTradeRow,
-      "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "management" | "stop_now" | "my_thinking"
-    >
-  >
+  patch: Partial<Pick<DailyReviewTradeRow, "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "weitere_these">>
 ): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
@@ -364,28 +361,27 @@ function plainNumber(value: number | null): string {
  * important output of the whole page. Fixed section order, empty
  * fields/sections omitted entirely (not rendered as "—"), no
  * interpretation or summarization — a pure passthrough of whatever was
- * captured. A review exported in the morning (Kopf + Block 2 only) is
- * a valid, useful partial export, not an error state.
+ * captured. A review exported in the morning (Risk Assessment + Plan
+ * block only) is a valid, useful partial export, not an error state.
  */
 export function buildMarkdownExport(data: DailyReviewData): string {
   const { review, watchlist, trades, guardrails } = data;
   const lines: string[] = [`# Daily Review — ${formatGermanDate(review.trade_date)}`];
 
-  const kopfLines: string[] = [];
-  if (review.risk_pct !== null) kopfLines.push(`- Risk: ${plainNumber(review.risk_pct)} %`);
-  if (review.r_value_usd !== null) kopfLines.push(`- 1R: ${plainNumber(review.r_value_usd)} USD`);
-  if (review.nlv_close !== null) kopfLines.push(`- NLV Close: ${plainNumber(review.nlv_close)} USD`);
-  if (watchlist.length > 0) kopfLines.push(`- Watchlist: ${watchlist.map((w) => w.ticker).join(", ")}`);
+  const riskLines: string[] = [];
+  if (review.risk_pct !== null) riskLines.push(`- Risk: ${plainNumber(review.risk_pct)} %`);
+  if (review.r_value_usd !== null) riskLines.push(`- 1R: ${plainNumber(review.r_value_usd)} USD`);
+  if (review.nlv_close !== null) riskLines.push(`- NLV Close: ${plainNumber(review.nlv_close)} USD`);
+  if (review.traction_recent_trades) riskLines.push(`- Traktion (3/6/12 Trades): ${review.traction_recent_trades}`);
+  if (watchlist.length > 0) riskLines.push(`- Watchlist: ${watchlist.map((w) => w.ticker).join(", ")}`);
   const takenTickers = watchlist.filter((w) => w.taken);
-  if (takenTickers.length > 0) kopfLines.push(`- Genommen: ${takenTickers.map((w) => w.ticker).join(", ")}`);
-  if (kopfLines.length > 0) lines.push("## Kopf", ...kopfLines);
+  if (takenTickers.length > 0) riskLines.push(`- Genommen: ${takenTickers.map((w) => w.ticker).join(", ")}`);
+  if (riskLines.length > 0) lines.push("## Risk Assessment", ...riskLines);
 
   const planLines: string[] = [];
   if (review.session_plan) planLines.push(review.session_plan);
   if (review.opportunity_spike) planLines.push(`- Opportunity Spike: ${review.opportunity_spike}`);
-  if (planLines.length > 0) lines.push("## Plan & Gedankengänge für die heutige Session", ...planLines);
-
-  if (review.market_context) lines.push("## Marktumgebung", review.market_context);
+  if (planLines.length > 0) lines.push("## Plan, Gedankengänge & Marktumgebung", ...planLines);
 
   const personalLines: string[] = [];
   if (review.personal_state) personalLines.push(review.personal_state);
@@ -398,16 +394,17 @@ export function buildMarkdownExport(data: DailyReviewData): string {
     for (const t of tradesWithTicker) {
       lines.push(`### ${t.ticker}`);
       if (t.setup) lines.push(`- Setup: ${t.setup}`);
-      if (t.trigger_tactic) lines.push(`- Trigger / Taktik: ${t.trigger_tactic}`);
-      if (t.stop_logic) lines.push(`- Stop-Logik: ${t.stop_logic}`);
-      if (t.what_happened) lines.push(`- Verlauf: ${t.what_happened}`);
-      if (t.management) lines.push(`- Management heute: ${t.management}`);
-      if (t.stop_now) lines.push(`- Stop jetzt: ${t.stop_now}`);
-      if (t.my_thinking) lines.push(`- Meine Denke: ${t.my_thinking}`);
+      if (t.trigger_tactic) lines.push(`- Taktik: ${t.trigger_tactic}`);
+      if (t.stop_logic) lines.push(`- Stop Placement: ${t.stop_logic}`);
+      if (t.weitere_these) lines.push(`- Weitere These: ${t.weitere_these}`);
+      if (t.what_happened) lines.push(`- D0 - Verlauf: ${t.what_happened}`);
     }
   }
 
+  if (review.portfolio_management) lines.push("## Portfolio Management", review.portfolio_management);
+
   const fazitLines: string[] = [];
+  if (review.post_session_review) fazitLines.push(review.post_session_review);
   if (review.what_went_well) fazitLines.push(`**Gut:** ${review.what_went_well}`);
   if (review.what_went_wrong) fazitLines.push(`**Nicht gut:** ${review.what_went_wrong}`);
   if (review.what_to_improve) fazitLines.push(`**Besser:** ${review.what_to_improve}`);

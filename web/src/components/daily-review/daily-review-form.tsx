@@ -123,6 +123,17 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+/** Marks the start of a new session-phase group (e.g. "Trading Session", "Postmarket") — presentational only, not a numbered block. */
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <div className="h-px flex-1 bg-border" />
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
 // Splits a pasted ticker list on whitespace, commas, or semicolons —
 // "AAPL, MSFT NVDA" / one-per-line all work — same delimiter set the
 // old Commitment watchlist importer used, brought back here since
@@ -231,7 +242,7 @@ function TradeCard({
   const { reportSaving, reportDone } = useReportSave();
   const timersRef = useRef<Partial<Record<string, ReturnType<typeof setTimeout>>>>({});
 
-  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "management" | "stop_now" | "my_thinking";
+  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "weitere_these" | "what_happened";
 
   const handleFieldChange = useCallback(
     (field: TradeField, value: string) => {
@@ -252,10 +263,8 @@ function TradeCard({
   const setupHandler = useCallback((value: string) => handleFieldChange("setup", value), [handleFieldChange]);
   const triggerHandler = useCallback((value: string) => handleFieldChange("trigger_tactic", value), [handleFieldChange]);
   const stopHandler = useCallback((value: string) => handleFieldChange("stop_logic", value), [handleFieldChange]);
+  const weitereTheseHandler = useCallback((value: string) => handleFieldChange("weitere_these", value), [handleFieldChange]);
   const whatHappenedHandler = useCallback((value: string) => handleFieldChange("what_happened", value), [handleFieldChange]);
-  const managementHandler = useCallback((value: string) => handleFieldChange("management", value), [handleFieldChange]);
-  const stopNowHandler = useCallback((value: string) => handleFieldChange("stop_now", value), [handleFieldChange]);
-  const myThinkingHandler = useCallback((value: string) => handleFieldChange("my_thinking", value), [handleFieldChange]);
 
   return (
     <div className="space-y-3 rounded-md border border-border bg-background p-3">
@@ -286,7 +295,7 @@ function TradeCard({
         </datalist>
       </Field>
 
-      <Field label="Trigger / Taktik">
+      <Field label="Taktik">
         <input
           list={`trigger-suggestions-${trade.id}`}
           defaultValue={trade.trigger_tactic ?? ""}
@@ -301,7 +310,7 @@ function TradeCard({
         </datalist>
       </Field>
 
-      <Field label="Stop-Logik">
+      <Field label="Stop Placement">
         <input
           list={`stop-suggestions-${trade.id}`}
           defaultValue={trade.stop_logic ?? ""}
@@ -316,25 +325,12 @@ function TradeCard({
         </datalist>
       </Field>
 
-      <Field label="Was ist passiert">
+      <Field label="Weitere These / Gedankengänge, falls notwendig">
+        <ShadowTextarea value={trade.weitere_these ?? ""} onChange={weitereTheseHandler} placeholder={SHADOW_TEXTS.tradeWeitereThese} rows={2} />
+      </Field>
+
+      <Field label="D0 - Verlauf">
         <ShadowTextarea value={trade.what_happened ?? ""} onChange={whatHappenedHandler} placeholder={SHADOW_TEXTS.tradeWhatHappened} />
-      </Field>
-
-      <Field label="Management heute">
-        <ShadowTextarea value={trade.management ?? ""} onChange={managementHandler} placeholder={SHADOW_TEXTS.tradeManagement} rows={2} />
-      </Field>
-
-      <Field label="Stop jetzt">
-        <input
-          defaultValue={trade.stop_now ?? ""}
-          onChange={(e) => stopNowHandler(e.target.value)}
-          placeholder={SHADOW_TEXTS.tradeStopNow}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
-        />
-      </Field>
-
-      <Field label="Meine Denke">
-        <ShadowTextarea value={trade.my_thinking ?? ""} onChange={myThinkingHandler} placeholder={SHADOW_TEXTS.tradeMyThinking} />
       </Field>
     </div>
   );
@@ -472,9 +468,9 @@ export function DailyReviewForm({
     parseOptionalNumber,
     contextValue
   );
-  const [marketContext, onMarketContextChange] = useAutosaveTextWithContext(
-    review.market_context ?? "",
-    (value) => saveField({ market_context: value || null }),
+  const [tractionRecentTrades, onTractionRecentTradesChange] = useAutosaveTextWithContext(
+    review.traction_recent_trades ?? "",
+    (value) => saveField({ traction_recent_trades: value || null }),
     contextValue
   );
   const [personalState, onPersonalStateChange] = useAutosaveTextWithContext(
@@ -523,6 +519,16 @@ export function DailyReviewForm({
     (value) => saveField({ opportunity_spike: value || null }),
     contextValue
   );
+  const [portfolioManagement, onPortfolioManagementChange] = useAutosaveTextWithContext(
+    review.portfolio_management ?? "",
+    (value) => saveField({ portfolio_management: value || null }),
+    contextValue
+  );
+  const [postSessionReview, onPostSessionReviewChange] = useAutosaveTextWithContext(
+    review.post_session_review ?? "",
+    (value) => saveField({ post_session_review: value || null }),
+    contextValue
+  );
 
   function handleAddTradeCard() {
     startTransition(async () => {
@@ -565,7 +571,7 @@ export function DailyReviewForm({
           <SaveStatusIndicator status={saveStatusState.status} error={saveStatusState.error} />
         </div>
 
-        <Block title="1 · Kopf">
+        <Block title="1 · Risk Assessment">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Risk %">
               <input
@@ -595,15 +601,23 @@ export function DailyReviewForm({
               />
             </Field>
           </div>
+          <Field label="Traktion in den letzten 3, 6, 12 Trades?">
+            <ShadowTextarea
+              value={tractionRecentTrades}
+              onChange={onTractionRecentTradesChange}
+              placeholder={SHADOW_TEXTS.tractionRecentTrades}
+              rows={2}
+            />
+          </Field>
           <Field label="Watchlist">
             <p className="mb-2 text-xs text-muted-foreground">{SHADOW_TEXTS.watchlist}</p>
             <WatchlistChips reviewId={review.id} items={watchlist} onListChange={setWatchlist} />
           </Field>
         </Block>
 
-        <Block title="2 · Plan & Gedankengänge für die heutige Session">
-          <Field label="Plan & Gedankengänge">
-            <ShadowTextarea value={sessionPlan} onChange={onSessionPlanChange} placeholder={SHADOW_TEXTS.sessionPlan} rows={5} />
+        <Block title="2 · Plan, Gedankengänge & Marktumgebung">
+          <Field label="Plan, Gedankengänge & Marktumgebung">
+            <ShadowTextarea value={sessionPlan} onChange={onSessionPlanChange} placeholder={SHADOW_TEXTS.sessionPlan} rows={7} />
           </Field>
           <Field label="Opportunity Spike">
             <ShadowTextarea
@@ -615,13 +629,7 @@ export function DailyReviewForm({
           </Field>
         </Block>
 
-        <Block title="3 · Marktumgebung">
-          <Field label="Marktumgebung">
-            <ShadowTextarea value={marketContext} onChange={onMarketContextChange} placeholder={SHADOW_TEXTS.marketContext} />
-          </Field>
-        </Block>
-
-        <Block title="4 · Persönliche Lage / Mentales">
+        <Block title="3 · Persönliche Lage / Mentales">
           <Field label="Persönliche Lage / Mentales">
             <ShadowTextarea value={personalState} onChange={onPersonalStateChange} placeholder={SHADOW_TEXTS.personalState} />
           </Field>
@@ -636,7 +644,24 @@ export function DailyReviewForm({
           </Field>
         </Block>
 
-        <Block title="5 · Ticker-Karten">
+        <SectionDivider label="Trading Session" />
+
+        <Block title="4 · Ticker-Karten">
+          <div className="flex items-center gap-2">
+            <select
+              defaultValue="neue_position"
+              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+            >
+              <option value="neue_position">Neue Position</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleAddTradeCard}
+              className="rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-accent hover:text-accent"
+            >
+              + Hinzufügen
+            </button>
+          </div>
           <div className="space-y-3">
             {trades.map((trade) => (
               <TradeCard
@@ -648,16 +673,25 @@ export function DailyReviewForm({
               />
             ))}
           </div>
-          <button
-            type="button"
-            onClick={handleAddTradeCard}
-            className="rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-accent hover:text-accent"
-          >
-            + Ticker
-          </button>
         </Block>
 
+        <Block title="5 · Portfolio Management">
+          <Field label="Portfolio Management">
+            <ShadowTextarea
+              value={portfolioManagement}
+              onChange={onPortfolioManagementChange}
+              placeholder={SHADOW_TEXTS.portfolioManagement}
+              rows={6}
+            />
+          </Field>
+        </Block>
+
+        <SectionDivider label="Postmarket" />
+
         <Block title="6 · Fazit">
+          <Field label="Post-Session-Review">
+            <ShadowTextarea value={postSessionReview} onChange={onPostSessionReviewChange} placeholder={SHADOW_TEXTS.postSessionReview} />
+          </Field>
           <Field label="Was lief gut">
             <ShadowTextarea value={whatWentWell} onChange={onWhatWentWellChange} placeholder={SHADOW_TEXTS.whatWentWell} />
           </Field>

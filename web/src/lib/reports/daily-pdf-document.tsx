@@ -83,23 +83,18 @@ export function DailyReviewPdfDocument({
         <Text style={styles.h1}>Daily Review — {formatGermanDate(review.trade_date)}</Text>
         <Text style={styles.meta}>Erzeugt am {new Date().toLocaleString("de-DE")}</Text>
 
-        <Section title="Kopf">
+        <Section title="Risk Assessment">
           {review.risk_pct != null ? <DetailRow label="Risk %" value={fmt(review.risk_pct)} /> : null}
           {review.r_value_usd != null ? <DetailRow label="1R USD" value={fmt(review.r_value_usd)} /> : null}
           {review.nlv_close != null ? <DetailRow label="NLV Close" value={fmt(review.nlv_close)} /> : null}
+          {review.traction_recent_trades ? <Text style={styles.paragraph}>Traktion (3/6/12 Trades): {review.traction_recent_trades}</Text> : null}
           {watchlist.length > 0 ? <DetailRow label="Watchlist" value={watchlist.map((w) => w.ticker).join(", ")} /> : null}
         </Section>
 
         {review.session_plan || review.opportunity_spike ? (
-          <Section title="Plan & Gedankengänge für die heutige Session">
+          <Section title="Plan, Gedankengänge & Marktumgebung">
             {review.session_plan ? <Text style={styles.paragraph}>{review.session_plan}</Text> : null}
             {review.opportunity_spike ? <DetailRow label="Opportunity Spike" value={review.opportunity_spike} /> : null}
-          </Section>
-        ) : null}
-
-        {review.market_context ? (
-          <Section title="Marktumgebung">
-            <Text style={styles.paragraph}>{review.market_context}</Text>
           </Section>
         ) : null}
 
@@ -118,14 +113,18 @@ export function DailyReviewPdfDocument({
                 <View key={t.id} style={styles.tradeCard}>
                   <Text style={styles.tradeTicker}>{t.ticker}</Text>
                   {t.setup ? <Text style={styles.paragraph}>Setup: {t.setup}</Text> : null}
-                  {t.trigger_tactic ? <Text style={styles.paragraph}>Trigger / Taktik: {t.trigger_tactic}</Text> : null}
-                  {t.stop_logic ? <Text style={styles.paragraph}>Stop-Logik: {t.stop_logic}</Text> : null}
-                  {t.what_happened ? <Text style={styles.paragraph}>Verlauf: {t.what_happened}</Text> : null}
-                  {t.management ? <Text style={styles.paragraph}>Management heute: {t.management}</Text> : null}
-                  {t.stop_now ? <Text style={styles.paragraph}>Stop jetzt: {t.stop_now}</Text> : null}
-                  {t.my_thinking ? <Text style={styles.paragraph}>Meine Denke: {t.my_thinking}</Text> : null}
+                  {t.trigger_tactic ? <Text style={styles.paragraph}>Taktik: {t.trigger_tactic}</Text> : null}
+                  {t.stop_logic ? <Text style={styles.paragraph}>Stop Placement: {t.stop_logic}</Text> : null}
+                  {t.weitere_these ? <Text style={styles.paragraph}>Weitere These: {t.weitere_these}</Text> : null}
+                  {t.what_happened ? <Text style={styles.paragraph}>D0 - Verlauf: {t.what_happened}</Text> : null}
                 </View>
               ))}
+          </Section>
+        ) : null}
+
+        {review.portfolio_management ? (
+          <Section title="Portfolio Management">
+            <Text style={styles.paragraph}>{review.portfolio_management}</Text>
           </Section>
         ) : null}
 
@@ -165,8 +164,9 @@ export function DailyReviewPdfDocument({
       ) : null}
 
       <Page size="A4" style={styles.page}>
-        {review.what_went_well || review.what_went_wrong || review.what_to_improve || review.self_grade ? (
+        {review.post_session_review || review.what_went_well || review.what_went_wrong || review.what_to_improve || review.self_grade ? (
           <Section title="Fazit">
+            {review.post_session_review ? <Text style={styles.paragraph}>{review.post_session_review}</Text> : null}
             {review.what_went_well ? <Text style={styles.paragraph}>Gut: {review.what_went_well}</Text> : null}
             {review.what_went_wrong ? <Text style={styles.paragraph}>Nicht gut: {review.what_went_wrong}</Text> : null}
             {review.what_to_improve ? <Text style={styles.paragraph}>Besser: {review.what_to_improve}</Text> : null}

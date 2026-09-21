@@ -23,10 +23,51 @@ export type WeeklyReviewData = {
 };
 
 /**
+ * Distinct Daily Review watchlist tickers for every trade_date in
+ * [weekStart, weekEnd] — the "Cache/Vorrat" that links the Daily
+ * Review's watchlist to that week's Shadowlist-Auswertung (Block 6),
+ * sorted alphabetically, comma-joined for direct use in the
+ * shadowlist_ticker field.
+ */
+export async function getWatchlistTickersForWeek(weekStart: string, weekEnd: string): Promise<string[]> {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: reviews, error: reviewsError } = await supabase
+      .from("daily_reviews")
+      .select("id")
+      .gte("trade_date", weekStart)
+      .lte("trade_date", weekEnd);
+    if (reviewsError || !reviews || reviews.length === 0) return [];
+
+    const reviewIds = reviews.map((r) => r.id as string);
+    const { data: watchlistRows, error: watchlistError } = await supabase
+      .from("daily_review_watchlist")
+      .select("ticker")
+      .in("review_id", reviewIds);
+    if (watchlistError) return [];
+
+    const tickers = new Set<string>();
+    for (const row of watchlistRows ?? []) {
+      const ticker = (row as { ticker: string }).ticker;
+      if (ticker && ticker.trim() !== "") tickers.add(ticker.trim());
+    }
+    return Array.from(tickers).sort((a, b) => a.localeCompare(b, "de"));
+  } catch (e) {
+    console.error("getWatchlistTickersForWeek failed", e);
+    return [];
+  }
+}
+
+/**
  * Gets the weekly_reviews row for the Monday-Friday week containing
  * weekStart, creating an empty one if it doesn't exist yet. Keyed on
  * (iso_year, iso_week) — idempotent under concurrent calls via a
- * unique-violation retry, same pattern as getOrCreateDailyReview.
+ * unique-violation retry, same pattern as getOrCreateDailyReview. A
+ * freshly created row's shadowlist_ticker is prefilled from that week's
+ * Daily Review watchlists (the user's "Cache/Vorrat" request) — a
+ * one-time convenience at creation, never overwriting anything the user
+ * later edits; see syncShadowlistTickerFromWatchlist for the manual
+ * re-pull.
  */
 export async function getOrCreateWeeklyReview(
   weekStart: string,
@@ -52,9 +93,17 @@ export async function getOrCreateWeeklyReview(
       return { data: existing as WeeklyReviewRow, error: null };
     }
 
+    const watchlistTickers = await getWatchlistTickersForWeek(weekStart, weekEnd);
+
     const { data: inserted, error: insertError } = await supabase
       .from("weekly_reviews")
-      .insert({ iso_year: isoYear, iso_week: isoWeek, week_start: weekStart, week_end: weekEnd })
+      .insert({
+        iso_year: isoYear,
+        iso_week: isoWeek,
+        week_start: weekStart,
+        week_end: weekEnd,
+        shadowlist_ticker: watchlistTickers.length > 0 ? watchlistTickers.join(", ") : null,
+      })
       .select("*")
       .single();
 
@@ -161,6 +210,17 @@ export type WeeklyReviewFieldPatch = Partial<
     | "idea_capture"
   >
 >;
+
+/** Re-pulls that week's Daily Review watchlist tickers into shadowlist_ticker, overwriting whatever was there — the manual "Aus Watchlist übernehmen" refresh, for when the watchlist changed after the week's row was first created. */
+export async function syncShadowlistTickerFromWatchlist(
+  reviewId: string,
+  weekStart: string,
+  weekEnd: string
+): Promise<{ data: string[]; error: string | null }> {
+  const tickers = await getWatchlistTickersForWeek(weekStart, weekEnd);
+  const result = await updateWeeklyReviewFields(reviewId, { shadowlist_ticker: tickers.length > 0 ? tickers.join(", ") : null });
+  return { data: tickers, error: result.error };
+}
 
 /** Generic partial update of the flat weekly_reviews columns — the autosave target for every field outside the repeatable cards. */
 export async function updateWeeklyReviewFields(reviewId: string, patch: WeeklyReviewFieldPatch): Promise<{ error: string | null }> {

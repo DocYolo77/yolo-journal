@@ -38,8 +38,6 @@ export const GUARDRAIL_STATUS_ORDER: DailyReviewGuardrailStatus[] = ["held", "br
 // do not paraphrase, the exact phrasing is what makes them work as a
 // recall cue.
 export const SHADOW_TEXTS = {
-  marketContext:
-    "Wo stehen QQQ/SPY zu EMA10, EMA20, SMA50? Wie weit sind die Indizes vom SMA50 entfernt — ist etwas überdehnt? Was hat die Breite gemacht, wer führt, wer bricht? Auflösung oder weiter in der Range?",
   personalState:
     "Wie war der Zustand vor dem Open — und hat er sich während der Session verändert? Fester Screen oder unterwegs? Gab es einen Impuls, den du erkannt und nicht ausgeführt hast? Euphorie? Angst? Verzweiflung? Teilst du Screenshots?",
   tradeSetup:
@@ -47,16 +45,13 @@ export const SHADOW_TEXTS = {
   tradeTriggerTactic:
     "Welcher Trigger, und hast du ihn abgewartet — oder warst du vorher drin? War das der optimale Einstieg der letzten 5–10 Tage? Falls nein: Wo lag der bessere Punkt, und warum hast du ihn nicht genommen?",
   tradeStopLogic: "Wo lag der Anker und wie weit war er entfernt? War der Stop erreichbar oder konstruiert?",
+  tradeWeitereThese: "Nur falls nötig — zusätzlicher Kontext zum Setup, der oben nicht reinpasst.",
   tradeWhatHappened:
     "Verlauf ohne Bewertung. Traktion sofort, Rücksetzer, Stop, Re-Add? Wie sah die Schlusskerze aus?",
-  tradeManagement:
-    "Stop nachgezogen, Partial, Add, Teil-Exit? Wenn nichts passiert ist: warum nicht — bewusst gehalten oder nicht hingesehen? Bei Partials und späten Adds: Was war der Grund, nicht nur der Preis?",
-  tradeStopNow: "Nur bei Änderung ausfüllen. Wo liegt der Stop nach Handelsschluss? Leer heißt unverändert.",
-  tradeMyThinking:
-    "Warum dieser Trade, warum diese Größe, warum hältst du ihn — oder warum nicht? Was hättest du getan, wenn es sofort gegen dich gelaufen wäre?",
   whatWentWell: "Nicht nur Ergebnisse — auch Dinge, die du gelassen hast. Welche Regel hat gehalten, obwohl sie unbequem war?",
   whatWentWrong: "Wo bist du vom Plan abgewichen, und war die Abweichung bewusst? Welcher Fehler ist eine Wiederholung?",
   whatToImprove: "Eine Sache. Konkret genug, dass sie morgen prüfbar ist.",
+  postSessionReview: "Allgemeine Gedankengänge zur Session — frei, unstrukturiert, bevor es in die drei festen Fazit-Felder geht.",
   guardrailsNote:
     "Limit, Risiko, Quelle, Stops — was hat gehalten, was nicht? Bewusster Override zählt als eingehalten, wenn er als solcher deklariert ist.",
   selfGrade: "Deutsche Schulnote, Prozess nicht PnL. Ein grüner Tag kann eine 4 sein, ein roter eine 1.",
@@ -64,10 +59,15 @@ export const SHADOW_TEXTS = {
   // (today's session, filled in the morning) — wording updated from
   // "morgen"/"gestern" framing to "heute"/"gestern" accordingly.
   watchlist: "Welche Namen sind reif — und in welche Richtung? Was steht schon in Position und braucht heute eine Entscheidung?",
+  // 2026-09-21: merged with the old standalone Marktumgebung block —
+  // both original prompts kept verbatim, back to back, since the field
+  // now covers both questions at once.
   sessionPlan:
-    "Stärke oder Rücksetzer? Wo willst du aggressiv sein, wo gar nicht? Welche Taktik pro Name, und was muss passieren, damit du NICHT klickst? Was ist gestern liegengeblieben, das heute zuerst drankommt? Wie fühlst du dich vor dem Open?",
+    "Wo stehen QQQ/SPY zu EMA10, EMA20, SMA50? Wie weit sind die Indizes vom SMA50 entfernt — ist etwas überdehnt? Was hat die Breite gemacht, wer führt, wer bricht? Auflösung oder weiter in der Range? Stärke oder Rücksetzer? Wo willst du aggressiv sein, wo gar nicht? Welche Taktik pro Name, und was muss passieren, damit du NICHT klickst? Was ist gestern liegengeblieben, das heute zuerst drankommt? Wie fühlst du dich vor dem Open?",
   opportunitySpike:
     "Welche Gruppe, welches Setup, welche frische Traktion würden heute mehr Risk rechtfertigen? Eine Zeile genügt. Wenn nichts davon eintritt: Standard-Risk. Bedingung vorher aufschreiben, nicht hinterher begründen.",
+  tractionRecentTrades: "Traktion in den letzten 3, 6, 12 Trades?",
+  portfolioManagement: "Alle Aktionen in Bezug auf Bestandspositionen und deren Entwicklungen.",
 } as const;
 
 /** Uppercase-trims a ticker input. Empty string means "not a valid ticker". */

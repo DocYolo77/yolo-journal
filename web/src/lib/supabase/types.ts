@@ -167,8 +167,9 @@ export type DailyReviewRow = {
   /** Optional — the value now gets pulled live from the broker in the LLM chat instead of being hand-typed here. */
   nlv_close: number | null;
   self_grade: string | null;
+  /** "Traktion in den letzten 3, 6, 12 Trades?" — added 2026-09-21, Risk Assessment block. */
+  traction_recent_trades: string | null;
 
-  market_context: string | null;
   personal_state: string | null;
   /** Half-steps are a real input (3.5 has occurred). */
   focus_level: number | null;
@@ -177,19 +178,25 @@ export type DailyReviewRow = {
   what_went_wrong: string | null;
   what_to_improve: string | null;
   guardrails_note: string | null;
+  /** Free, unstructured first field in Fazit, added 2026-09-21 — general post-session reflection ahead of the three structured Fazit fields. */
+  post_session_review: string | null;
 
   /**
-   * Renamed from next_session_plan in 20260909000000 — v2.1 moves this
-   * block from position 6 (describing tomorrow's session) to position
-   * 2 (describing *today's* session, filled in the morning). The old
-   * `gameplan` column still exists in the DB (the v2.1 spec's schema
-   * section didn't call for dropping it, only for this rename) but
-   * nothing in the app reads or writes it anymore — its content is
-   * folded into this field instead.
+   * Renamed from next_session_plan in 20260909000000 — v2.1 moved this
+   * block from position 6 (describing tomorrow's session) to position 2
+   * (describing *today's* session, filled in the morning). As of
+   * 2026-09-21 it also absorbed the old standalone `market_context`
+   * column (dropped in that migration, its content folded in here) —
+   * one merged "Plan, Gedankengänge & Marktumgebung" field instead of
+   * two separate blocks. The old `gameplan` column still exists in the
+   * DB (never targeted for a drop) but nothing in the app reads or
+   * writes it.
    */
   session_plan: string | null;
   /** Pre-declared condition for taking more than standard risk *today* (was "tomorrow" pre-v2.1) — written before the fact, not justified after. */
   opportunity_spike: string | null;
+  /** New "Portfolio Management" block (2026-09-21) — actions on and developments of existing positions, freeform, separate from the Ticker-Karten (which are new-position entries only now). */
+  portfolio_management: string | null;
 
   created_at: string;
   updated_at: string;
@@ -210,9 +217,13 @@ export type DailyReviewWatchlistRow = {
   updated_at: string;
 };
 
-// "Ticker-Karten" — one card per ticker touched today, entry and/or
-// management of an existing position (never a separate card type for
-// each), see CLAUDE.md.
+// "Ticker-Karten" — one card per new position entered today (2026-09-21:
+// existing-position management moved to daily_reviews.portfolio_management
+// as its own freeform field, so these cards are new-position-only now —
+// see CLAUDE.md). The `management`/`stop_now`/`my_thinking` columns still
+// exist in the DB with real historical data but are orphaned as of
+// 2026-09-21, same precedent as daily_reviews.gameplan: nothing reads or
+// writes them anymore, deliberately not dropped.
 export type DailyReviewTradeRow = {
   id: string;
   user_id: string | null;
@@ -223,12 +234,10 @@ export type DailyReviewTradeRow = {
   setup: string | null;
   trigger_tactic: string | null;
   stop_logic: string | null;
+  /** "D0 - Verlauf" — what happened on entry day, without judgment. */
   what_happened: string | null;
-  /** "Management heute" — stop nachgezogen, Partial, Add, Exit. */
-  management: string | null;
-  /** "Stop jetzt" — change-only: empty means "unverändert", not "kein Stop". */
-  stop_now: string | null;
-  my_thinking: string | null;
+  /** "Weitere These / Gedankengänge, falls notwendig" — added 2026-09-21. */
+  weitere_these: string | null;
 
   created_at: string;
   updated_at: string;

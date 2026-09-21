@@ -51,13 +51,18 @@ One main table plus three child tables (all under `daily_reviews`'s new v2 shape
 `supabase/migrations/20260908000000_v2_capture_tool_rewrite.sql` for the authoritative
 definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
 
-- `daily_reviews` — one row per `trade_date`, every field but `trade_date` optional. Has an
-  orphaned `gameplan` column left over from pre-v2.1 (see Product invariants below) — nothing
-  reads or writes it; don't resurrect it as a separate field.
+- `daily_reviews` — one row per `trade_date`, every field but `trade_date` optional. Has two
+  orphaned columns nothing reads or writes anymore — `gameplan` (pre-v2.1) and, as of
+  2026-09-21, `market_context` (dropped outright; its content was folded into `session_plan`
+  by the migration, see Product invariants below) — don't resurrect either as a separate field.
 - `daily_review_watchlist` — ticker chips, one list per day (no `scope` split as of v2.1 —
   that column was dropped), carries `taken` and `note` directly (this **is** the Shadowlist's
-  data source — there is no separate shadowlist table).
-- `daily_review_trades` — repeatable trade cards, all free text, no enums.
+  data source — there is no separate shadowlist table). As of 2026-09-21 it also feeds Weekly
+  Review's `shadowlist_ticker` (see "Weekly Review v2" below).
+- `daily_review_trades` — repeatable trade cards, new-position entries only as of 2026-09-21
+  (existing-position management moved to `daily_reviews.portfolio_management`), all free text,
+  no enums. `management`/`stop_now`/`my_thinking` are orphaned columns with real historical
+  data — left in place, not read or written anymore, same precedent as `gameplan`.
 - `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
   not "held."
 
@@ -97,6 +102,14 @@ open is now filled — not with computation, but with six more flat free-text fi
 the week's shadowlist tickers and their own manual analysis of it by hand; the page still
 computes nothing itself.
 
+**Watchlist → Shadowlist link (2026-09-21):** `shadowlist_ticker` is prefilled once, at
+row-creation time, from the distinct `daily_review_watchlist` tickers across that ISO week's
+Daily Reviews (`getWatchlistTickersForWeek`/`getOrCreateWeeklyReview` in
+`lib/data/weekly-review.ts`) — a one-time convenience, never silently overwriting a later
+manual edit. An "Aus Watchlist übernehmen" button next to the field re-pulls and overwrites on
+demand (`syncShadowlistTickerFromWatchlist`), for when the watchlist changed after the row was
+first created.
+
 ## Product invariants (v2)
 
 - Every field except `trade_date` is optional. Empty fields never appear in exports.
@@ -112,12 +125,24 @@ computes nothing itself.
   Override / n. a.), default empty. This is documentation, not enforcement — nothing is
   blocked, nothing is validated, no note is derived from a status.
 - The page is opened twice on the same trade_date, same row both times: in the morning for
-  the Kopf watchlist and "Plan & Gedankengänge für die heutige Session" block (`session_plan` +
-  `opportunity_spike`), in the evening for Marktumgebung, Persönliche Lage/Mentales,
-  Ticker-Karten, and Fazit. No lock, no time gate — every block stays editable all day; the
-  morning plan can still be changed in the evening, and that's fine (v2.1 removed the earlier
-  watchlist-prefill/carry-forward mechanic entirely — there is no more "tomorrow's watchlist"
-  concept and no cross-day copy).
+  the Risk Assessment watchlist and "Plan, Gedankengänge & Marktumgebung" block (`session_plan`
+  + `opportunity_spike`), in the evening for Persönliche Lage/Mentales, Ticker-Karten,
+  Portfolio Management, and Fazit. No lock, no time gate — every block stays editable all day;
+  the morning plan can still be changed in the evening, and that's fine (v2.1 removed the
+  earlier watchlist-prefill/carry-forward mechanic entirely — there is no more "tomorrow's
+  watchlist" concept and no cross-day copy).
+- **2026-09-21 restructure:** Block 1 "Kopf" renamed to "Risk Assessment" (+ new
+  `traction_recent_trades` field). Block 2 absorbed the old standalone Block 3 "Marktumgebung"
+  into one merged `session_plan` field titled "Plan, Gedankengänge & Marktumgebung" — that
+  standalone block is gone, and every block after it shifted down by one number. A
+  presentational "Trading Session" divider (no number, no data) sits before Ticker-Karten;
+  Ticker-Karten itself is now new-position-entries only (`weitere_these` replaces the removed
+  Management/Stop-jetzt/Meine-Denke fields — see "Current data model" above for what happened
+  to those columns), with a "Neue Position" dropdown above the card list. A new numbered block
+  "Portfolio Management" (`portfolio_management`, freeform) follows, for existing-position
+  actions that used to live on the trade cards. A "Postmarket" divider precedes Fazit, which
+  now opens with a new unstructured `post_session_review` field ahead of the three existing
+  Was-lief-gut/nicht-gut/besser fields.
 - The Markdown export ("Für Claude kopieren") is the most important output of the page: fixed
   section order, empty fields/sections omitted entirely, no interpretation or summarization.
   Treat any change to its format as a breaking change to something else (an LLM chat) that
