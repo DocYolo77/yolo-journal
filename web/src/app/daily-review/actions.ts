@@ -61,6 +61,7 @@ export async function updateTradeCardAction(
     setup: string;
     trigger_tactic: string;
     stop_logic: string;
+    setup_taktik_stop: string;
     what_happened: string;
     weitere_these: string;
   }>

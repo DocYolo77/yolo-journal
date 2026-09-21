@@ -231,9 +231,19 @@ export type DailyReviewTradeRow = {
 
   sort_order: number;
   ticker: string;
+  /**
+   * `setup`/`trigger_tactic`/`stop_logic` stay live ONLY for cards on a
+   * trade_date <= SETUP_MERGE_CUTOVER_DATE (lib/validation/daily-review.ts,
+   * "2026-09-22") — the "legacy" three-field layout for sessions that
+   * already had real data typed in before the merge. Cards on or after
+   * the cutover date use `setup_taktik_stop` instead and leave these
+   * three null.
+   */
   setup: string | null;
   trigger_tactic: string | null;
   stop_logic: string | null;
+  /** Merged Setup/Taktik/Stop-Placement field, added 2026-09-22 — see the comment on `setup` above. */
+  setup_taktik_stop: string | null;
   /** "D0 - Verlauf" — what happened on entry day, without judgment. */
   what_happened: string | null;
   /** "Weitere These / Gedankengänge, falls notwendig" — added 2026-09-21. */

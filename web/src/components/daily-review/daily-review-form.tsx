@@ -12,6 +12,7 @@ import {
   DAILY_REVIEW_GUARDRAILS,
   GUARDRAIL_STATUS_LABELS,
   GUARDRAIL_STATUS_ORDER,
+  SETUP_MERGE_CUTOVER_DATE,
   SHADOW_TEXTS,
   normalizeTicker,
   parseFocusLevel,
@@ -231,18 +232,21 @@ function WatchlistChips({
 function TradeCard({
   trade,
   suggestions,
+  useMergedSetupField,
   onUpdate,
   onRemove,
 }: {
   trade: DailyReviewTradeRow;
   suggestions: { setup: string[]; trigger_tactic: string[]; stop_logic: string[] };
+  /** True for trade_date >= SETUP_MERGE_CUTOVER_DATE — one merged Setup/Taktik/Stop-Placement field instead of the legacy three. */
+  useMergedSetupField: boolean;
   onUpdate: (id: string, patch: Partial<DailyReviewTradeRow>) => void;
   onRemove: (id: string) => void;
 }) {
   const { reportSaving, reportDone } = useReportSave();
   const timersRef = useRef<Partial<Record<string, ReturnType<typeof setTimeout>>>>({});
 
-  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "weitere_these" | "what_happened";
+  type TradeField = "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "setup_taktik_stop" | "weitere_these" | "what_happened";
 
   const handleFieldChange = useCallback(
     (field: TradeField, value: string) => {
@@ -263,6 +267,7 @@ function TradeCard({
   const setupHandler = useCallback((value: string) => handleFieldChange("setup", value), [handleFieldChange]);
   const triggerHandler = useCallback((value: string) => handleFieldChange("trigger_tactic", value), [handleFieldChange]);
   const stopHandler = useCallback((value: string) => handleFieldChange("stop_logic", value), [handleFieldChange]);
+  const setupTaktikStopHandler = useCallback((value: string) => handleFieldChange("setup_taktik_stop", value), [handleFieldChange]);
   const weitereTheseHandler = useCallback((value: string) => handleFieldChange("weitere_these", value), [handleFieldChange]);
   const whatHappenedHandler = useCallback((value: string) => handleFieldChange("what_happened", value), [handleFieldChange]);
 
@@ -280,50 +285,63 @@ function TradeCard({
         </button>
       </div>
 
-      <Field label="Setup">
-        <input
-          list={`setup-suggestions-${trade.id}`}
-          defaultValue={trade.setup ?? ""}
-          onChange={(e) => setupHandler(e.target.value)}
-          placeholder={SHADOW_TEXTS.tradeSetup}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
-        />
-        <datalist id={`setup-suggestions-${trade.id}`}>
-          {suggestions.setup.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </Field>
+      {useMergedSetupField ? (
+        <Field label="Setup / Taktik / Stop Placement">
+          <ShadowTextarea
+            value={trade.setup_taktik_stop ?? ""}
+            onChange={setupTaktikStopHandler}
+            placeholder={SHADOW_TEXTS.tradeSetupTaktikStop}
+            rows={4}
+          />
+        </Field>
+      ) : (
+        <>
+          <Field label="Setup">
+            <input
+              list={`setup-suggestions-${trade.id}`}
+              defaultValue={trade.setup ?? ""}
+              onChange={(e) => setupHandler(e.target.value)}
+              placeholder={SHADOW_TEXTS.tradeSetup}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
+            />
+            <datalist id={`setup-suggestions-${trade.id}`}>
+              {suggestions.setup.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
 
-      <Field label="Taktik">
-        <input
-          list={`trigger-suggestions-${trade.id}`}
-          defaultValue={trade.trigger_tactic ?? ""}
-          onChange={(e) => triggerHandler(e.target.value)}
-          placeholder={SHADOW_TEXTS.tradeTriggerTactic}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
-        />
-        <datalist id={`trigger-suggestions-${trade.id}`}>
-          {suggestions.trigger_tactic.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </Field>
+          <Field label="Taktik">
+            <input
+              list={`trigger-suggestions-${trade.id}`}
+              defaultValue={trade.trigger_tactic ?? ""}
+              onChange={(e) => triggerHandler(e.target.value)}
+              placeholder={SHADOW_TEXTS.tradeTriggerTactic}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
+            />
+            <datalist id={`trigger-suggestions-${trade.id}`}>
+              {suggestions.trigger_tactic.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
 
-      <Field label="Stop Placement">
-        <input
-          list={`stop-suggestions-${trade.id}`}
-          defaultValue={trade.stop_logic ?? ""}
-          onChange={(e) => stopHandler(e.target.value)}
-          placeholder={SHADOW_TEXTS.tradeStopLogic}
-          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
-        />
-        <datalist id={`stop-suggestions-${trade.id}`}>
-          {suggestions.stop_logic.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </Field>
+          <Field label="Stop Placement">
+            <input
+              list={`stop-suggestions-${trade.id}`}
+              defaultValue={trade.stop_logic ?? ""}
+              onChange={(e) => stopHandler(e.target.value)}
+              placeholder={SHADOW_TEXTS.tradeStopLogic}
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-accent focus:outline-none"
+            />
+            <datalist id={`stop-suggestions-${trade.id}`}>
+              {suggestions.stop_logic.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
+        </>
+      )}
 
       <Field label="Weitere These / Gedankengänge, falls notwendig">
         <ShadowTextarea value={trade.weitere_these ?? ""} onChange={weitereTheseHandler} placeholder={SHADOW_TEXTS.tradeWeitereThese} rows={2} />
@@ -668,6 +686,7 @@ export function DailyReviewForm({
                 key={trade.id}
                 trade={trade}
                 suggestions={tradeFieldSuggestions}
+                useMergedSetupField={tradeDate >= SETUP_MERGE_CUTOVER_DATE}
                 onUpdate={handleUpdateTradeCard}
                 onRemove={handleRemoveTradeCard}
               />

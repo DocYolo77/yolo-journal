@@ -33,6 +33,16 @@ export const GUARDRAIL_STATUS_LABELS: Record<DailyReviewGuardrailStatus, string>
 
 export const GUARDRAIL_STATUS_ORDER: DailyReviewGuardrailStatus[] = ["held", "broken", "override", "na"];
 
+/**
+ * Trade cards on this trade_date or earlier keep the "legacy" three-
+ * field Setup/Taktik/Stop-Placement layout (bound to `setup`/
+ * `trigger_tactic`/`stop_logic`) because real data already exists there.
+ * 2026-09-22 onward, new cards get one merged field instead
+ * (`setup_taktik_stop`). Not retroactive — see the 20260922000000
+ * migration.
+ */
+export const SETUP_MERGE_CUTOVER_DATE = "2026-09-22";
+
 // §4 — Shadowtexte. Placeholder-as-prompt text, styled as a guiding
 // question, never persisted. Verbatim German wording from the spec —
 // do not paraphrase, the exact phrasing is what makes them work as a
@@ -45,6 +55,12 @@ export const SHADOW_TEXTS = {
   tradeTriggerTactic:
     "Welcher Trigger, und hast du ihn abgewartet — oder warst du vorher drin? War das der optimale Einstieg der letzten 5–10 Tage? Falls nein: Wo lag der bessere Punkt, und warum hast du ihn nicht genommen?",
   tradeStopLogic: "Wo lag der Anker und wie weit war er entfernt? War der Stop erreichbar oder konstruiert?",
+  // 2026-09-22: Setup/Taktik/Stop Placement merge into one field for
+  // cards on or after SETUP_MERGE_CUTOVER_DATE — all three original
+  // prompts kept verbatim, labeled inline so the merged question stays
+  // scannable.
+  tradeSetupTaktikStop:
+    "Setup: Welche Struktur, in deinen Worten? Steht der Name über oder unter EMA10/EMA20? Tight and orderly — oder Barcode? Wie eng waren die letzten zwei bis drei Sessions? Taktik: Welcher Trigger, und hast du ihn abgewartet — oder warst du vorher drin? War das der optimale Einstieg der letzten 5–10 Tage? Falls nein: Wo lag der bessere Punkt, und warum hast du ihn nicht genommen? Stop Placement: Wo lag der Anker und wie weit war er entfernt? War der Stop erreichbar oder konstruiert?",
   tradeWeitereThese: "Nur falls nötig — zusätzlicher Kontext zum Setup, der oben nicht reinpasst.",
   tradeWhatHappened:
     "Verlauf ohne Bewertung. Traktion sofort, Rücksetzer, Stop, Re-Add? Wie sah die Schlusskerze aus?",

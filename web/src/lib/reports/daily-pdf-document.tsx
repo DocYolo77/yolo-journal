@@ -112,9 +112,15 @@ export function DailyReviewPdfDocument({
               .map((t) => (
                 <View key={t.id} style={styles.tradeCard}>
                   <Text style={styles.tradeTicker}>{t.ticker}</Text>
-                  {t.setup ? <Text style={styles.paragraph}>Setup: {t.setup}</Text> : null}
-                  {t.trigger_tactic ? <Text style={styles.paragraph}>Taktik: {t.trigger_tactic}</Text> : null}
-                  {t.stop_logic ? <Text style={styles.paragraph}>Stop Placement: {t.stop_logic}</Text> : null}
+                  {t.setup_taktik_stop ? (
+                    <Text style={styles.paragraph}>Setup / Taktik / Stop Placement: {t.setup_taktik_stop}</Text>
+                  ) : (
+                    <>
+                      {t.setup ? <Text style={styles.paragraph}>Setup: {t.setup}</Text> : null}
+                      {t.trigger_tactic ? <Text style={styles.paragraph}>Taktik: {t.trigger_tactic}</Text> : null}
+                      {t.stop_logic ? <Text style={styles.paragraph}>Stop Placement: {t.stop_logic}</Text> : null}
+                    </>
+                  )}
                   {t.weitere_these ? <Text style={styles.paragraph}>Weitere These: {t.weitere_these}</Text> : null}
                   {t.what_happened ? <Text style={styles.paragraph}>D0 - Verlauf: {t.what_happened}</Text> : null}
                 </View>

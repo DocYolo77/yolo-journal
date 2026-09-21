@@ -62,7 +62,10 @@ definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
 - `daily_review_trades` — repeatable trade cards, new-position entries only as of 2026-09-21
   (existing-position management moved to `daily_reviews.portfolio_management`), all free text,
   no enums. `management`/`stop_now`/`my_thinking` are orphaned columns with real historical
-  data — left in place, not read or written anymore, same precedent as `gameplan`.
+  data — left in place, not read or written anymore, same precedent as `gameplan`. As of
+  2026-09-22, `setup`/`trigger_tactic`/`stop_logic` are *also* legacy-only (still live, but
+  only for `trade_date < 2026-09-22`) — see the Setup-merge invariant below for the cutover
+  and `setup_taktik_stop`, the merged field new cards use instead.
 - `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
   not "held."
 
@@ -115,9 +118,9 @@ first created.
 - Every field except `trade_date` is optional. Empty fields never appear in exports.
 - Autosave per field on an ~800ms debounce. No submit button, no required-field validation
   gate, one shared save-status indicator.
-- Setup / Trigger-Taktik / Stop-Logik on trade cards are free text with autocomplete from the
-  user's own history — never a dropdown or enum. Setup vocabulary changes faster than any
-  enum could track.
+- Setup / Trigger-Taktik / Stop-Logik on legacy trade cards (`trade_date < 2026-09-22`, see the
+  Setup-merge invariant below) are free text with autocomplete from the user's own history —
+  never a dropdown or enum. Setup vocabulary changes faster than any enum could track.
 - Shadow-text placeholders (the exact German prompts in `lib/validation/daily-review.ts`'s
   `SHADOW_TEXTS`) are prompts, not labels — they vanish on typing and are never persisted.
   Don't paraphrase them if you touch this file; the wording is deliberate.
@@ -143,6 +146,15 @@ first created.
   actions that used to live on the trade cards. A "Postmarket" divider precedes Fazit, which
   now opens with a new unstructured `post_session_review` field ahead of the three existing
   Was-lief-gut/nicht-gut/besser fields.
+- **2026-09-22 Setup merge (cutover, not retroactive):** trade cards on `trade_date >=
+  SETUP_MERGE_CUTOVER_DATE` ("2026-09-22", `lib/validation/daily-review.ts`) get one merged
+  "Setup / Taktik / Stop Placement" field (`setup_taktik_stop`) instead of three separate ones.
+  Cards on 2026-09-21 or earlier keep the legacy three-field layout (`setup`/`trigger_tactic`/
+  `stop_logic`) untouched, since real data already existed there — the user asked explicitly
+  for a cutover, not a merge-and-migrate. `TradeCard` in `daily-review-form.tsx` picks the
+  layout per-card from its review's `trade_date`; the Markdown/PDF exports check
+  `setup_taktik_stop` first and fall back to the three legacy fields. No autocomplete on the
+  merged field (unlike the legacy three) — a full paragraph doesn't suggest well from history.
 - The Markdown export ("Für Claude kopieren") is the most important output of the page: fixed
   section order, empty fields/sections omitted entirely, no interpretation or summarization.
   Treat any change to its format as a breaking change to something else (an LLM chat) that

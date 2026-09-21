@@ -250,7 +250,9 @@ export async function addTradeCard(
 
 export async function updateTradeCard(
   id: string,
-  patch: Partial<Pick<DailyReviewTradeRow, "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "what_happened" | "weitere_these">>
+  patch: Partial<
+    Pick<DailyReviewTradeRow, "ticker" | "setup" | "trigger_tactic" | "stop_logic" | "setup_taktik_stop" | "what_happened" | "weitere_these">
+  >
 ): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseAdmin();
@@ -393,9 +395,13 @@ export function buildMarkdownExport(data: DailyReviewData): string {
     lines.push("## Trades");
     for (const t of tradesWithTicker) {
       lines.push(`### ${t.ticker}`);
-      if (t.setup) lines.push(`- Setup: ${t.setup}`);
-      if (t.trigger_tactic) lines.push(`- Taktik: ${t.trigger_tactic}`);
-      if (t.stop_logic) lines.push(`- Stop Placement: ${t.stop_logic}`);
+      if (t.setup_taktik_stop) {
+        lines.push(`- Setup / Taktik / Stop Placement: ${t.setup_taktik_stop}`);
+      } else {
+        if (t.setup) lines.push(`- Setup: ${t.setup}`);
+        if (t.trigger_tactic) lines.push(`- Taktik: ${t.trigger_tactic}`);
+        if (t.stop_logic) lines.push(`- Stop Placement: ${t.stop_logic}`);
+      }
       if (t.weitere_these) lines.push(`- Weitere These: ${t.weitere_these}`);
       if (t.what_happened) lines.push(`- D0 - Verlauf: ${t.what_happened}`);
     }
