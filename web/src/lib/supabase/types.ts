@@ -197,6 +197,15 @@ export type DailyReviewRow = {
   opportunity_spike: string | null;
   /** New "Portfolio Management" block (2026-09-21) — actions on and developments of existing positions, freeform, separate from the Ticker-Karten (which are new-position entries only now). */
   portfolio_management: string | null;
+  /**
+   * Freeform Trades dump, added 2026-10-08 — replaces the per-ticker
+   * Ticker-Karten UI for `trade_date >= TRADES_FREITEXT_CUTOVER_DATE`
+   * (lib/validation/daily-review.ts): ticker, thesis, and thoughts all
+   * typed in as they happen, sorted out later in the LLM chat with real
+   * prices. Earlier dates keep rendering `daily_review_trades` as
+   * before — this column is simply null/unused for those.
+   */
+  trades_notes: string | null;
 
   created_at: string;
   updated_at: string;

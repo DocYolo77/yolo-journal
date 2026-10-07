@@ -6,7 +6,7 @@ import type {
   DailyReviewGuardrailRow,
   DailyReviewGuardrailStatus,
 } from "@/lib/supabase/types";
-import { DAILY_REVIEW_GUARDRAILS, GUARDRAIL_STATUS_LABELS } from "@/lib/validation/daily-review";
+import { DAILY_REVIEW_GUARDRAILS, GUARDRAIL_STATUS_LABELS, TRADES_FREITEXT_CUTOVER_DATE } from "@/lib/validation/daily-review";
 
 // v2 Daily Review data layer — a pure capture tool. Every function here
 // stores or retrieves inputs; none of them judge, enforce, or compute.
@@ -135,6 +135,7 @@ export type DailyReviewFieldPatch = Partial<
     | "session_plan"
     | "opportunity_spike"
     | "portfolio_management"
+    | "trades_notes"
   >
 >;
 
@@ -390,20 +391,24 @@ export function buildMarkdownExport(data: DailyReviewData): string {
   if (review.focus_level !== null) personalLines.push(`Fokus: ${plainNumber(review.focus_level)}/5`);
   if (personalLines.length > 0) lines.push("## Persönliche Lage / Mentales", ...personalLines);
 
-  const tradesWithTicker = trades.filter((t) => t.ticker.trim() !== "");
-  if (tradesWithTicker.length > 0) {
-    lines.push("## Trades");
-    for (const t of tradesWithTicker) {
-      lines.push(`### ${t.ticker}`);
-      if (t.setup_taktik_stop) {
-        lines.push(`- Setup / Taktik / Stop Placement: ${t.setup_taktik_stop}`);
-      } else {
-        if (t.setup) lines.push(`- Setup: ${t.setup}`);
-        if (t.trigger_tactic) lines.push(`- Taktik: ${t.trigger_tactic}`);
-        if (t.stop_logic) lines.push(`- Stop Placement: ${t.stop_logic}`);
+  if (review.trade_date >= TRADES_FREITEXT_CUTOVER_DATE) {
+    if (review.trades_notes) lines.push("## Trades", review.trades_notes);
+  } else {
+    const tradesWithTicker = trades.filter((t) => t.ticker.trim() !== "");
+    if (tradesWithTicker.length > 0) {
+      lines.push("## Trades");
+      for (const t of tradesWithTicker) {
+        lines.push(`### ${t.ticker}`);
+        if (t.setup_taktik_stop) {
+          lines.push(`- Setup / Taktik / Stop Placement: ${t.setup_taktik_stop}`);
+        } else {
+          if (t.setup) lines.push(`- Setup: ${t.setup}`);
+          if (t.trigger_tactic) lines.push(`- Taktik: ${t.trigger_tactic}`);
+          if (t.stop_logic) lines.push(`- Stop Placement: ${t.stop_logic}`);
+        }
+        if (t.weitere_these) lines.push(`- Weitere These: ${t.weitere_these}`);
+        if (t.what_happened) lines.push(`- D0 - Verlauf: ${t.what_happened}`);
       }
-      if (t.weitere_these) lines.push(`- Weitere These: ${t.weitere_these}`);
-      if (t.what_happened) lines.push(`- D0 - Verlauf: ${t.what_happened}`);
     }
   }
 

@@ -14,6 +14,7 @@ import {
   GUARDRAIL_STATUS_ORDER,
   SETUP_MERGE_CUTOVER_DATE,
   SHADOW_TEXTS,
+  TRADES_FREITEXT_CUTOVER_DATE,
   normalizeTicker,
   parseFocusLevel,
   parseOptionalNumber,
@@ -542,6 +543,11 @@ export function DailyReviewForm({
     (value) => saveField({ portfolio_management: value || null }),
     contextValue
   );
+  const [tradesNotes, onTradesNotesChange] = useAutosaveTextWithContext(
+    review.trades_notes ?? "",
+    (value) => saveField({ trades_notes: value || null }),
+    contextValue
+  );
   const [postSessionReview, onPostSessionReviewChange] = useAutosaveTextWithContext(
     review.post_session_review ?? "",
     (value) => saveField({ post_session_review: value || null }),
@@ -664,34 +670,42 @@ export function DailyReviewForm({
 
         <SectionDivider label="Trading Session" />
 
-        <Block title="4 · Ticker-Karten">
-          <div className="flex items-center gap-2">
-            <select
-              defaultValue="neue_position"
-              className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-            >
-              <option value="neue_position">Neue Position</option>
-            </select>
-            <button
-              type="button"
-              onClick={handleAddTradeCard}
-              className="rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-accent hover:text-accent"
-            >
-              + Hinzufügen
-            </button>
-          </div>
-          <div className="space-y-3">
-            {trades.map((trade) => (
-              <TradeCard
-                key={trade.id}
-                trade={trade}
-                suggestions={tradeFieldSuggestions}
-                useMergedSetupField={tradeDate >= SETUP_MERGE_CUTOVER_DATE}
-                onUpdate={handleUpdateTradeCard}
-                onRemove={handleRemoveTradeCard}
-              />
-            ))}
-          </div>
+        <Block title="4 · Trades">
+          {tradeDate >= TRADES_FREITEXT_CUTOVER_DATE ? (
+            <Field label="Trades">
+              <ShadowTextarea value={tradesNotes} onChange={onTradesNotesChange} placeholder={SHADOW_TEXTS.tradesNotes} rows={8} />
+            </Field>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <select
+                  defaultValue="neue_position"
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                >
+                  <option value="neue_position">Neue Position</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddTradeCard}
+                  className="rounded-md border border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-accent hover:text-accent"
+                >
+                  + Hinzufügen
+                </button>
+              </div>
+              <div className="space-y-3">
+                {trades.map((trade) => (
+                  <TradeCard
+                    key={trade.id}
+                    trade={trade}
+                    suggestions={tradeFieldSuggestions}
+                    useMergedSetupField={tradeDate >= SETUP_MERGE_CUTOVER_DATE}
+                    onUpdate={handleUpdateTradeCard}
+                    onRemove={handleRemoveTradeCard}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </Block>
 
         <Block title="5 · Portfolio Management">

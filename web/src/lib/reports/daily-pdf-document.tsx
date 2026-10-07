@@ -4,7 +4,7 @@
 import { Document, Page, View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { DailyReviewData } from "@/lib/data/daily-review";
 import type { ShadowlistEntry } from "@/lib/data/shadowlist";
-import { DAILY_REVIEW_GUARDRAILS, GUARDRAIL_STATUS_LABELS } from "@/lib/validation/daily-review";
+import { DAILY_REVIEW_GUARDRAILS, GUARDRAIL_STATUS_LABELS, TRADES_FREITEXT_CUTOVER_DATE } from "@/lib/validation/daily-review";
 
 // §5.1 — "Archivformat, unverändert im Charakter zu bisher." Same
 // @react-pdf/renderer approach as the Weekly Report PDF
@@ -105,7 +105,13 @@ export function DailyReviewPdfDocument({
           </Section>
         ) : null}
 
-        {trades.filter((t) => t.ticker.trim() !== "").length > 0 ? (
+        {review.trade_date >= TRADES_FREITEXT_CUTOVER_DATE ? (
+          review.trades_notes ? (
+            <Section title="Trades">
+              <Text style={styles.paragraph}>{review.trades_notes}</Text>
+            </Section>
+          ) : null
+        ) : trades.filter((t) => t.ticker.trim() !== "").length > 0 ? (
           <Section title="Trades">
             {trades
               .filter((t) => t.ticker.trim() !== "")

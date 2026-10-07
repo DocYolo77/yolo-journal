@@ -55,6 +55,9 @@ definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
   orphaned columns nothing reads or writes anymore — `gameplan` (pre-v2.1) and, as of
   2026-09-21, `market_context` (dropped outright; its content was folded into `session_plan`
   by the migration, see Product invariants below) — don't resurrect either as a separate field.
+  As of 2026-10-08, `trades_notes` holds a freeform Trades dump for `trade_date >=
+  TRADES_FREITEXT_CUTOVER_DATE` — see `daily_review_trades` below and the Trades-freitext
+  invariant.
 - `daily_review_watchlist` — ticker chips, one list per day (no `scope` split as of v2.1 —
   that column was dropped), carries `taken` and `note` directly (this **is** the Shadowlist's
   data source — there is no separate shadowlist table). As of 2026-09-21 it also feeds Weekly
@@ -65,7 +68,11 @@ definitions and `web/src/lib/supabase/types.ts` for the hand-written TS mirror):
   data — left in place, not read or written anymore, same precedent as `gameplan`. As of
   2026-09-22, `setup`/`trigger_tactic`/`stop_logic` are *also* legacy-only (still live, but
   only for `trade_date < 2026-09-22`) — see the Setup-merge invariant below for the cutover
-  and `setup_taktik_stop`, the merged field new cards use instead.
+  and `setup_taktik_stop`, the merged field new cards use instead. As of 2026-10-08 the whole
+  table is legacy-only: `trade_date >= TRADES_FREITEXT_CUTOVER_DATE` uses
+  `daily_reviews.trades_notes` instead and writes nothing here at all — see the Trades-freitext
+  invariant below. The table itself is untouched (74 real rows as of the cutover), just no
+  longer written to for new dates.
 - `daily_review_guardrails` — a fixed nine-key click-list, default state is *absent* (no row),
   not "held."
 
@@ -155,6 +162,18 @@ first created.
   layout per-card from its review's `trade_date`; the Markdown/PDF exports check
   `setup_taktik_stop` first and fall back to the three legacy fields. No autocomplete on the
   merged field (unlike the legacy three) — a full paragraph doesn't suggest well from history.
+  **Superseded for `trade_date >= 2026-10-08`** by the Trades-freitext change below, which
+  drops the Ticker-Karten UI entirely for those dates — this invariant and `setup_taktik_stop`
+  still apply to 2026-09-22 through 2026-10-07 cards.
+- **2026-10-08 Trades freitext (cutover, not retroactive):** the whole Ticker-Karten
+  repeatable-card UI is replaced by one freeform field (`trades_notes`, Block 4 "Trades") for
+  `trade_date >= TRADES_FREITEXT_CUTOVER_DATE` ("2026-10-08", `lib/validation/daily-review.ts`)
+  — same shape and rationale as `portfolio_management`: dump ticker, thesis, and thoughts as
+  they happen, sorted out later with real prices in the LLM chat, not structured here. Dates
+  before the cutover keep rendering `daily_review_trades` exactly as before (74 real rows,
+  untouched) — same "cutover, not retroactive" reasoning as the Setup merge above, and the same
+  per-`trade_date` branch point in `daily-review-form.tsx`'s Block 4 and in the Markdown/PDF
+  exports.
 - The Markdown export ("Für Claude kopieren") is the most important output of the page: fixed
   section order, empty fields/sections omitted entirely, no interpretation or summarization.
   Treat any change to its format as a breaking change to something else (an LLM chat) that

@@ -43,6 +43,16 @@ export const GUARDRAIL_STATUS_ORDER: DailyReviewGuardrailStatus[] = ["held", "br
  */
 export const SETUP_MERGE_CUTOVER_DATE = "2026-09-22";
 
+/**
+ * Trade_dates on or after this date drop the Ticker-Karten repeatable
+ * cards entirely in favor of one freeform `trades_notes` field (same
+ * shape as `portfolio_management`) — the user dumps ticker/thesis/
+ * thoughts as they happen and lets the later LLM chat sort it out with
+ * real prices. Earlier dates keep rendering `daily_review_trades` as
+ * before. Not retroactive — see the 20261008000000 migration.
+ */
+export const TRADES_FREITEXT_CUTOVER_DATE = "2026-10-08";
+
 // §4 — Shadowtexte. Placeholder-as-prompt text, styled as a guiding
 // question, never persisted. Verbatim German wording from the spec —
 // do not paraphrase, the exact phrasing is what makes them work as a
@@ -84,6 +94,8 @@ export const SHADOW_TEXTS = {
     "Welche Gruppe, welches Setup, welche frische Traktion würden heute mehr Risk rechtfertigen? Eine Zeile genügt. Wenn nichts davon eintritt: Standard-Risk. Bedingung vorher aufschreiben, nicht hinterher begründen.",
   tractionRecentTrades: "Traktion in den letzten 3, 6, 12 Trades?",
   portfolioManagement: "Alle Aktionen in Bezug auf Bestandspositionen und deren Entwicklungen.",
+  tradesNotes:
+    "Ticker, These und Gedanken zu den Trades der Session — einfach nacheinander reinschreiben, wie sie passieren. Preise und die endgültige Sortierung kommen später im Gespräch.",
 } as const;
 
 /** Uppercase-trims a ticker input. Empty string means "not a valid ticker". */
